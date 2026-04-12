@@ -1,0 +1,103 @@
+import { createClient } from "@supabase/supabase-js";
+import { fetchAllRssFeeds } from "@/lib/sources/rss";
+import { searchAllTopics } from "@/lib/sources/search";
+import { filterArticles } from "@/lib/digest/filter";
+import { processArticles, generateDaySummary } from "@/lib/digest/processor";
+import type { Topic, RssSource, Alert, Exclusion, UserSettings } from "@/types";
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+export async function generateDigest(userId: string, type: "scheduled" | "on_demand"): Promise<string> {
+  const supabase = getServiceClient();
+
+  const [settingsRes, topicsRes, sourcesRes, alertsRes, exclusionsRes] = await Promise.all([
+    supabase.from("user_settings").select("*").eq("user_id", userId).single(),
+    supabase.from("topics").select("*").eq("user_id", userId).eq("is_active", true),
+    supabase.from("rss_sources").select("*").eq("user_id", userId).eq("is_active", true),
+    supabase.from("alerts").select("*").eq("user_id", userId).eq("is_active", true),
+    supabase.from("exclusions").select("*").eq("user_id", userId).eq("is_active", true),
+  ]);
+
+  const settings: UserSettings = settingsRes.data || {
+    user_id: userId, digest_time: "07:00", language: "pt-BR", summary_style: "executive",
+    max_articles: 20, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  };
+  const topics: Topic[] = topicsRes.data || [];
+  const sources: RssSource[] = sourcesRes.data || [];
+  const alerts: Alert[] = alertsRes.data || [];
+  const exclusions: Exclusion[] = exclusionsRes.data || [];
+
+  const { data: digest, error: digestError } = await supabase
+    .from("digests")
+    .insert({ user_id: userId, type, status: "processing" })
+    .select()
+    .single();
+
+  if (digestError || !digest) throw new Error(`Failed to create digest: ${digestError?.message}`);
+
+  try {
+    const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
+    const searchQueries = [
+      ...topics.map((t) => ({
+        query: t.keywords.join(" OR "),
+        maxResults: t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3,
+      })),
+      ...alerts
+        .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
+        .map((a) => ({ query: a.query, maxResults: 5 })),
+    ];
+
+    const [rssArticles, searchArticles] = await Promise.all([
+      fetchAllRssFeeds(rssFeeds),
+      searchAllTopics(searchQueries),
+    ]);
+
+    const allRaw = [...rssArticles, ...searchArticles];
+    const filtered = filterArticles(allRaw, exclusions).slice(0, settings.max_articles);
+
+    if (filtered.length === 0) {
+      await supabase.from("digests").update({ status: "completed", summary: "Nenhuma noticia encontrada para hoje." }).eq("id", digest.id);
+      return digest.id;
+    }
+
+    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style);
+
+    const articleRows = processed.map((a) => ({
+      digest_id: digest.id,
+      topic_id: a.topic_id,
+      alert_id: a.alert_id,
+      title: a.title,
+      source_name: a.source_name,
+      source_url: a.source_url,
+      summary: a.summary,
+      relevance_score: a.relevance_score,
+      is_highlight: a.is_highlight,
+      image_url: a.image_url,
+      published_at: a.published_at,
+    }));
+
+    await supabase.from("articles").insert(articleRows);
+
+    const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+
+    await supabase.from("digests").update({
+      status: "completed",
+      summary: daySummary,
+      metadata: {
+        total_articles: processed.length,
+        sources_count: new Set(processed.map((a) => a.source_name)).size,
+        topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
+      },
+    }).eq("id", digest.id);
+
+    return digest.id;
+  } catch (error) {
+    await supabase.from("digests").update({ status: "failed", metadata: { error: String(error) } }).eq("id", digest.id);
+    throw error;
+  }
+}
