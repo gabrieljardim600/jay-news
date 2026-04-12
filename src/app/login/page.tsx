@@ -31,12 +31,6 @@ export default function LoginPage() {
       return;
     }
 
-    if (isSignUp) {
-      setError("Verifique seu email para confirmar o cadastro.");
-      setLoading(false);
-      return;
-    }
-
     router.push("/");
     router.refresh();
   }
