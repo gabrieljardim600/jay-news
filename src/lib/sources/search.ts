@@ -11,7 +11,11 @@ interface TavilyResponse {
   results: TavilyResult[];
 }
 
-export async function searchTavily(query: string, maxResults: number = 5): Promise<RawArticle[]> {
+export async function searchTavily(
+  query: string,
+  maxResults: number = 5,
+  includeDomains?: string[]
+): Promise<RawArticle[]> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
     console.error("TAVILY_API_KEY not set");
@@ -19,16 +23,21 @@ export async function searchTavily(query: string, maxResults: number = 5): Promi
   }
 
   try {
+    const body: Record<string, unknown> = {
+      api_key: apiKey,
+      query,
+      max_results: maxResults,
+      search_depth: "basic",
+      include_answer: false,
+    };
+    if (includeDomains && includeDomains.length > 0) {
+      body.include_domains = includeDomains;
+    }
+
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query,
-        max_results: maxResults,
-        search_depth: "basic",
-        include_answer: false,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -50,7 +59,11 @@ export async function searchTavily(query: string, maxResults: number = 5): Promi
   }
 }
 
-export async function searchAllTopics(queries: { query: string; maxResults?: number }[]): Promise<RawArticle[]> {
-  const results = await Promise.allSettled(queries.map((q) => searchTavily(q.query, q.maxResults || 5)));
+export async function searchAllTopics(
+  queries: { query: string; maxResults?: number; includeDomains?: string[] }[]
+): Promise<RawArticle[]> {
+  const results = await Promise.allSettled(
+    queries.map((q) => searchTavily(q.query, q.maxResults || 5, q.includeDomains))
+  );
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }

@@ -42,15 +42,26 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
   try {
     const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
-    const searchQueries = [
-      ...topics.map((t) => ({
-        query: t.keywords.join(" OR "),
-        maxResults: t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3,
-      })),
-      ...alerts
-        .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
-        .map((a) => ({ query: a.query, maxResults: 5 })),
+
+    // Build focused search queries per topic using top 3 keywords + language context
+    const topicQueries = topics.flatMap((t) => {
+      const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
+      const topKeywords = t.keywords.slice(0, 3).join(" ");
+      const lang = settings.language === "pt-BR" ? "Brasil noticias" : "news";
+      return [{ query: `${topKeywords} ${lang}`, maxResults }];
+    });
+
+    // Dedicated The News search — priority source, always included
+    const theNewsQueries = [
+      { query: "noticias tecnologia negocios hoje", maxResults: 8, includeDomains: ["thenewscc.beehiiv.com"] },
     ];
+
+    // Alert queries
+    const alertQueries = alerts
+      .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
+      .map((a) => ({ query: a.query, maxResults: 5 }));
+
+    const searchQueries = [...theNewsQueries, ...topicQueries, ...alertQueries];
 
     const [rssArticles, searchArticles] = await Promise.all([
       fetchAllRssFeeds(rssFeeds),
