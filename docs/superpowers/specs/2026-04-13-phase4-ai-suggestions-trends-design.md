@@ -29,15 +29,16 @@ No new database tables. No breaking changes to existing APIs.
 // Settings mode: load topics from DB
 { digestConfigId: string }
 
-// Wizard mode: topics not in DB yet
+// Wizard mode: topics not yet saved to DB
 { interests: string[] }
 ```
 
 **Flow:**
 1. If `digestConfigId`: load topics (name + keywords) and existing source URLs for that config from Supabase.
-2. If `interests`: use the provided strings directly; existing sources = empty.
+2. If `interests`: use the provided strings directly; treat existing sources as empty.
 3. Build Claude prompt and call Claude API.
-4. Return suggestions JSON.
+4. Parse JSON response. If parse fails or Claude errors, return `{ suggestions: [] }` — never 500.
+5. Return suggestions.
 
 **Claude prompt:**
 
@@ -62,8 +63,6 @@ Return ONLY a JSON array (no explanation):
 { suggestions: Array<{ name: string; url: string; description: string; topic_name: string | null }> }
 ```
 
-**Error handling:** If Claude fails or returns malformed JSON, return `{ suggestions: [] }` — never 500.
-
 ---
 
 ### 2.2 Component — `src/components/settings/SourceSuggestions.tsx`
@@ -75,155 +74,230 @@ Client component. Reusable in both Settings and Wizard.
 interface SourceSuggestionsProps {
   digestConfigId?: string;   // Settings mode
   interests?: string[];      // Wizard mode
-  onAdd: (source: { name: string; url: string; topic_name: string | null }) => void;
+  onAdd: (suggestion: { name: string; url: string; topic_name: string | null }) => void;
 }
 ```
 
-**Behavior:**
-- Renders a `"✨ Sugerir fontes com IA"` button (ghost variant, small).
-- On click: sets `loading = true`, calls `POST /api/sources/suggest`, stores results in local state.
-- While loading: button shows spinner + "Buscando sugestões...".
-- After response: renders suggestions list inline below the button.
-- Each suggestion card shows: name, URL (truncated), description, "+ Adicionar" button, "✕ Ignorar" button.
-- "Adicionar" calls `onAdd(suggestion)` and removes the card from the list.
-- "Ignorar" removes the card from the list.
-- If all suggestions are dismissed: hide the suggestions list (button remains to re-fetch).
-- Empty suggestions: show "Nenhuma sugestão encontrada."
+The `onAdd` prop emits the raw suggestion. Each integration site is responsible for converting to its own type (see sections 2.3 and 2.4).
 
-**Styling:** consistent with existing settings components — `bg-surface`, `border border-border`, `rounded-md`, primary color accent.
+**States:**
+- **Idle:** "✨ Sugerir fontes com IA" button (ghost variant, small).
+- **Loading:** button shows spinner + "Buscando sugestões...".
+- **Error (network/server):** show inline `"Não foi possível buscar sugestões. Tente novamente."` in `text-danger text-xs`.
+- **Empty:** show `"Nenhuma sugestão encontrada."` in `text-text-muted text-sm`.
+- **Results:** render suggestions list below the button.
+
+**Each suggestion card:**
+- Source name (bold), URL (truncated, `text-xs text-text-muted`), description (`text-sm text-text-secondary`)
+- `"+ Adicionar"` button → calls `onAdd(suggestion)` → removes card from list
+- `"✕ Ignorar"` button → removes card from list
+- When all suggestions are dismissed: hide the list (button remains to re-fetch)
+
+**Styling:** `bg-surface`, `border border-border`, `rounded-md`, `px-3 py-2` per card.
 
 ---
 
 ### 2.3 Settings Integration — `src/components/settings/SourcesList.tsx`
 
-Add `<SourceSuggestions>` below the "Fontes RSS" header row (above the sources list).
+Add `<SourceSuggestions digestConfigId={configId} onAdd={handleSuggestionAdd} />` below the "Fontes RSS" header row, above the sources list.
 
-When a suggestion is accepted via `onAdd`:
-1. Call `POST /api/sources` with `{ name, url, topic_id: null, weight: 3, digest_config_id: configId }`.
-2. Call `onRefresh()` to reload the sources list.
+Add handler:
 
-Pass `digestConfigId={configId}` to SourceSuggestions.
+```ts
+async function handleSuggestionAdd(suggestion: { name: string; url: string; topic_name: string | null }) {
+  const res = await fetch("/api/sources", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: suggestion.name,
+      url: suggestion.url,
+      topic_id: null,
+      weight: 3,
+      digest_config_id: configId,
+    }),
+  });
+  if (!res.ok) {
+    // Show inline error: "Não foi possível adicionar esta fonte. A URL pode ser inválida."
+    // Use a local error state string rendered near the SourceSuggestions component
+    return;
+  }
+  onRefresh();
+}
+```
+
+The `POST /api/sources` route validates the URL with `isValidRssUrl`. If it returns 400, the handler must surface an inline error message — it must NOT silently fail.
 
 ---
 
 ### 2.4 Wizard Integration — `src/components/wizard/StepSources.tsx`
 
-Add `<SourceSuggestions>` at the top of the step, above the interest sections.
+Add `<SourceSuggestions interests={interests} onAdd={handleSuggestionAdd} />` at the top of the step, above the interest sections.
 
-Pass `interests={interests}` (the full interests array from step 1).
+Add handler:
 
-When a suggestion is accepted via `onAdd`:
-- Call `onAdd({ name, url, weight: 3, interest: suggestion.topic_name, testResult: null })` using the existing `addSource` function signature.
-- The source is added to the wizard's in-memory list. No RSS test required for AI-suggested sources.
+```ts
+function handleSuggestionAdd(suggestion: { name: string; url: string; topic_name: string | null }) {
+  addSource({
+    name: suggestion.name,
+    url: suggestion.url,
+    weight: 3,
+    interest: suggestion.topic_name,
+    testResult: null,  // intentionally bypasses the SourceAdder test flow
+  });
+}
+```
+
+`testResult: null` is valid per the `WizardSource` type (defined as `SourceTestResult | null`). The `SourceAdder` component's test-before-confirm guard applies only to manually entered URLs, not to AI suggestions. AI-suggested sources skip testing; if the URL is invalid, the user can delete the source later.
 
 ---
 
 ## 3. Trend Tracking
 
-### 3.1 Computation — `src/lib/digest/trends.ts`
+### 3.1 New Type — `src/types/index.ts`
 
-New file. Single exported function:
+Add `TrendItem` interface and update `Digest.metadata`:
 
 ```ts
-export async function computeTrends(
-  digestConfigId: string,
-  supabase: SupabaseClient
-): Promise<TrendItem[]>
-```
-
-**`TrendItem` type:**
-```ts
-interface TrendItem {
+export interface TrendItem {
   title: string;
   description: string;
   days_active: number;
   article_count: number;
 }
+
+export interface DigestMetadata {
+  total_articles?: number;
+  sources_count?: number;
+  topics_count?: number;
+  trends?: TrendItem[];
+  error?: string;
+}
+```
+
+Change `Digest.metadata` from `Record<string, unknown>` to `DigestMetadata`.
+
+---
+
+### 3.2 Computation — `src/lib/digest/trends.ts`
+
+New file. Single exported function:
+
+```ts
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TrendItem } from "@/types";
+import Anthropic from "@anthropic-ai/sdk";
+
+export async function computeTrends(
+  digestConfigId: string,
+  currentDigestId: string,
+  supabase: SupabaseClient
+): Promise<TrendItem[]>
 ```
 
 **Flow:**
-1. Query the last 7 completed digests for this `digestConfigId` (ordered by `generated_at DESC`).
-2. For each digest, load its articles (title + summary).
-3. If total articles across all digests < 5: return `[]` (not enough data).
-4. Build Claude prompt with articles grouped by day.
-5. Call Claude. Parse response. Return array (max 4 items).
+1. Query the 7 most recent **completed** digests for this `digestConfigId`, ordered by `generated_at DESC`, excluding the current digest:
+   ```ts
+   const { data: recentDigests } = await supabase
+     .from("digests")
+     .select("id, generated_at")
+     .eq("digest_config_id", digestConfigId)
+     .eq("status", "completed")
+     .neq("id", currentDigestId)
+     .order("generated_at", { ascending: false })
+     .limit(7);
+   ```
 
-**Claude prompt:**
+2. If `recentDigests` is empty or has fewer than 2 entries: return `[]` (not enough history).
+
+3. Load all articles for those digest IDs in **one query** (avoid N+1):
+   ```ts
+   const digestIds = recentDigests.map((d) => d.id);
+   const { data: articles } = await supabase
+     .from("articles")
+     .select("digest_id, title, summary")
+     .in("digest_id", digestIds);
+   ```
+
+4. Group articles by `digest_id`. Build a map from `digestId → generated_at` from step 1 results.
+
+5. If total article count < 5: return `[]`.
+
+6. Build prompt string grouping titles by date (format: `[YYYY-MM-DD]: title1 | title2 | ...`).
+
+7. Call Claude with the prompt (see section 3.3). Parse JSON. Return array (max 4 items).
+
+8. If Claude fails or JSON is malformed: return `[]` — never throw.
+
+---
+
+### 3.3 Claude Prompt for Trends
 
 ```
-Here are news articles from the last 7 daily digests, grouped by day. 
+Here are news articles from recent daily digests, grouped by day.
 Identify 2–4 ongoing stories or recurring themes that appear across multiple days.
-Each theme should represent a distinct ongoing news event (not a general topic like "technology").
+Each theme should represent a distinct ongoing news event (not a broad topic like "technology" or "economy").
 
 Articles by day:
-[Day 1 - YYYY-MM-DD]: title1 | title2 | ...
-[Day 2 - YYYY-MM-DD]: title3 | title4 | ...
+[Day 1 - YYYY-MM-DD]: title1 | title2 | title3
+[Day 2 - YYYY-MM-DD]: title4 | title5
 ...
 
-Return ONLY a JSON array:
+Return ONLY a JSON array (no explanation):
 [{"title":"...","description":"...","days_active":N,"article_count":N}]
-"title": short name for the story (max 6 words)
-"description": one sentence explaining what's happening
+"title": short name for the story (max 6 words, in the same language as the articles)
+"description": one sentence explaining what is happening (same language as articles)
 "days_active": how many days this story appeared
-"article_count": approximate number of articles about this story
+"article_count": approximate total articles about this story across all days
 
 If no recurring stories are found, return [].
 ```
 
-**Error handling:** If Claude fails or returns malformed JSON, return `[]` — never throw.
-
 ---
 
-### 3.2 Storage
+### 3.4 Integration in Generator — `src/lib/digest/generator.ts`
 
-Trends are stored in the `metadata` JSONB field of the `digests` table (already exists):
-
-```json
-{
-  "trends": [
-    { "title": "Banco Master", "description": "Negociações de aquisição pelo BTG em andamento", "days_active": 4, "article_count": 7 }
-  ]
-}
-```
-
-No new migration required.
-
----
-
-### 3.3 Generation Integration — `src/app/api/digest/generate/route.ts`
-
-After saving all articles and generating the day summary (current final step), add:
+`computeTrends` is called **inside `generator.ts`**, after `generateDaySummary` and before the status-update write. The trends result is merged into the single existing `metadata` update:
 
 ```ts
-const trends = await computeTrends(digestConfigId, supabase);
-if (trends.length > 0) {
-  await supabase
-    .from("digests")
-    .update({ metadata: { ...existingMetadata, trends } })
-    .eq("id", digestId);
-}
+// After: const daySummary = await generateDaySummary(...)
+const trends = await computeTrends(digestConfigId, digest.id, supabase);
+
+await supabase.from("digests").update({
+  status: "completed",
+  summary: daySummary,
+  metadata: {
+    total_articles: processed.length,
+    sources_count: new Set(processed.map((a) => a.source_name)).size,
+    topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
+    ...(trends.length > 0 ? { trends } : {}),
+  } satisfies DigestMetadata,
+}).eq("id", digest.id);
 ```
 
-Import `computeTrends` from `@/lib/digest/trends`.
+Import `computeTrends` from `@/lib/digest/trends`. Import `DigestMetadata` from `@/types`.
+
+There is **only one** `metadata` update call for the completed status — no second update.
 
 ---
 
-### 3.4 Feed — `GET /api/digest/[id]`
+### 3.5 Feed — `GET /api/digest/[id]`
 
-No changes needed. This route already returns the full digest record including `metadata`. The frontend reads `digest.metadata?.trends`.
+No changes needed. This route already returns the full digest record including `metadata`. With `Digest.metadata` now typed as `DigestMetadata`, the frontend reads `digest.metadata.trends` safely.
 
 ---
 
-### 3.5 Component — `src/components/feed/TrendingSection.tsx`
+### 3.6 Component — `src/components/feed/TrendingSection.tsx`
 
 **Props:**
 ```ts
+import type { TrendItem } from "@/types";
+
 interface TrendingSectionProps {
   trends: TrendItem[];
 }
 ```
 
-**Renders:** only if `trends.length > 0`.
+Renders only if `trends.length > 0`.
 
 **Layout:**
 ```tsx
@@ -231,7 +305,7 @@ interface TrendingSectionProps {
   <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">
     📈 Em alta
   </p>
-  <div className="flex flex-col gap-2">
+  <div className="flex flex-col">
     {trends.map((trend, i) => (
       <div key={i} className="flex flex-col gap-0.5 py-2 border-b border-border/30 last:border-0">
         <span className="text-sm font-semibold text-text">{trend.title}</span>
@@ -245,19 +319,19 @@ interface TrendingSectionProps {
 
 ---
 
-### 3.6 Feed Integration — `src/app/page.tsx`
+### 3.7 Feed Integration — `src/app/page.tsx`
 
-Add `<TrendingSection>` between `<DaySummary>` and `<HighlightCards>`, reading from the loaded digest:
+Add `<TrendingSection>` between `<DaySummary>` and `<HighlightCards>`:
 
 ```tsx
-{current?.metadata?.trends?.length > 0 && (
+{current?.metadata?.trends && current.metadata.trends.length > 0 && (
   <TrendingSection trends={current.metadata.trends} />
 )}
 ```
 
 Import `TrendingSection` from `@/components/feed/TrendingSection`.
 
-Add `trends?: TrendItem[]` to the `metadata` field in the `Digest` type in `src/types/index.ts`.
+With `Digest.metadata` typed as `DigestMetadata`, `.trends` is `TrendItem[] | undefined` — no cast needed.
 
 ---
 
@@ -265,22 +339,22 @@ Add `trends?: TrendItem[]` to the `metadata` field in the `Digest` type in `src/
 
 | File | Action | Purpose |
 |------|--------|---------|
+| `src/types/index.ts` | Modify | Add `TrendItem`, `DigestMetadata`; update `Digest.metadata` type |
 | `src/app/api/sources/suggest/route.ts` | **Create** | Claude source suggestions endpoint |
-| `src/lib/digest/trends.ts` | **Create** | computeTrends function |
+| `src/lib/digest/trends.ts` | **Create** | `computeTrends` function |
 | `src/components/settings/SourceSuggestions.tsx` | **Create** | Reusable suggestions UI component |
 | `src/components/feed/TrendingSection.tsx` | **Create** | "Em alta" section in feed |
-| `src/components/settings/SourcesList.tsx` | Modify | Add SourceSuggestions |
-| `src/components/wizard/StepSources.tsx` | Modify | Add SourceSuggestions |
-| `src/app/api/digest/generate/route.ts` | Modify | Call computeTrends after generation |
-| `src/app/page.tsx` | Modify | Render TrendingSection |
-| `src/types/index.ts` | Modify | Add `trends` to Digest metadata type |
+| `src/components/settings/SourcesList.tsx` | Modify | Add `SourceSuggestions` + error handling |
+| `src/components/wizard/StepSources.tsx` | Modify | Add `SourceSuggestions` |
+| `src/lib/digest/generator.ts` | Modify | Call `computeTrends`, merge into metadata update |
+| `src/app/page.tsx` | Modify | Render `TrendingSection` |
 
 ---
 
 ## 5. Out of Scope
 
-- Testing RSS URLs for AI-suggested sources (user can delete if invalid)
+- Testing RSS URLs for AI-suggested sources before adding
 - Caching suggestions between sessions
 - User ability to dismiss/hide trends persistently
-- Trend history across multiple digests (only current digest shows trends)
 - Filtering feed articles by trending story
+- Trend history visible across multiple digests (only current digest shows trends)
