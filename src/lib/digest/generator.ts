@@ -3,7 +3,7 @@ import { fetchAllRssFeeds } from "@/lib/sources/rss";
 import { searchAllTopics } from "@/lib/sources/search";
 import { filterArticles } from "@/lib/digest/filter";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
-import type { Topic, RssSource, Alert, Exclusion, UserSettings } from "@/types";
+import type { Topic, RssSource, Alert, Exclusion } from "@/types";
 
 function getServiceClient() {
   return createClient(
@@ -12,21 +12,42 @@ function getServiceClient() {
   );
 }
 
-export async function generateDigest(userId: string, type: "scheduled" | "on_demand"): Promise<string> {
+export async function generateDigest(userId: string, type: "scheduled" | "on_demand", digestConfigId?: string): Promise<string> {
   const supabase = getServiceClient();
 
-  const [settingsRes, topicsRes, sourcesRes, alertsRes, exclusionsRes] = await Promise.all([
-    supabase.from("user_settings").select("*").eq("user_id", userId).single(),
-    supabase.from("topics").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("rss_sources").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("alerts").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("exclusions").select("*").eq("user_id", userId).eq("is_active", true),
+  // Load digest config settings
+  let settings: { language: string; summary_style: string; max_articles: number };
+
+  if (digestConfigId) {
+    const { data: config } = await supabase
+      .from("digest_configs")
+      .select("language, summary_style, max_articles")
+      .eq("id", digestConfigId)
+      .single();
+
+    if (!config) throw new Error(`Digest config not found: ${digestConfigId}`);
+    settings = config;
+  } else {
+    const { data: settingsData } = await supabase
+      .from("user_settings")
+      .select("language, summary_style, max_articles")
+      .eq("user_id", userId)
+      .single();
+    settings = settingsData || { language: "pt-BR", summary_style: "executive", max_articles: 20 };
+  }
+
+  // Load config-scoped data
+  const configFilter = digestConfigId
+    ? { column: "digest_config_id" as const, value: digestConfigId }
+    : { column: "user_id" as const, value: userId };
+
+  const [topicsRes, sourcesRes, alertsRes, exclusionsRes] = await Promise.all([
+    supabase.from("topics").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("rss_sources").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("alerts").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("exclusions").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
   ]);
 
-  const settings: UserSettings = settingsRes.data || {
-    user_id: userId, digest_time: "07:00", language: "pt-BR", summary_style: "executive",
-    max_articles: 20, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-  };
   const topics: Topic[] = topicsRes.data || [];
   const sources: RssSource[] = sourcesRes.data || [];
   const alerts: Alert[] = alertsRes.data || [];
@@ -34,7 +55,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
   const { data: digest, error: digestError } = await supabase
     .from("digests")
-    .insert({ user_id: userId, type, status: "processing" })
+    .insert({ user_id: userId, type, status: "processing", digest_config_id: digestConfigId || null })
     .select()
     .single();
 
@@ -43,7 +64,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
   try {
     const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
 
-    // Build focused search queries per topic using top 3 keywords + language context
     const topicQueries = topics.flatMap((t) => {
       const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
       const topKeywords = t.keywords.slice(0, 3).join(" ");
@@ -51,12 +71,10 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       return [{ query: `${topKeywords} ${lang}`, maxResults }];
     });
 
-    // Dedicated The News search — priority source, always included
     const theNewsQueries = [
       { query: "the news newsletter brasil hoje", maxResults: 5, includeDomains: ["thenewscc.beehiiv.com"] },
     ];
 
-    // Alert queries
     const alertQueries = alerts
       .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
       .map((a) => ({ query: a.query, maxResults: 5 }));
@@ -68,17 +86,18 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       searchAllTopics(searchQueries),
     ]);
 
-    // Interleave to ensure topic-based Tavily results aren't all cut off by RSS volume
-    // Cap RSS per-source at 5 to prevent any single feed from dominating
+    // Cap RSS per-source based on weight (weight * 2, default 3 → cap 6)
+    const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
     const cappedRss = Object.values(
       rssArticles.reduce<Record<string, typeof rssArticles>>((acc, a) => {
+        const source = sourceByName[a.source_name];
+        const cap = source ? source.weight * 2 : 6;
         if (!acc[a.source_name]) acc[a.source_name] = [];
-        if (acc[a.source_name].length < 5) acc[a.source_name].push(a);
+        if (acc[a.source_name].length < cap) acc[a.source_name].push(a);
         return acc;
       }, {})
     ).flat();
 
-    // Tavily results first, then RSS — ensures topic searches are represented
     const allRaw = [...searchArticles, ...cappedRss];
     const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
@@ -87,7 +106,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       return digest.id;
     }
 
-    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style);
+    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style, sources);
 
     const articleRows = processed.map((a) => ({
       digest_id: digest.id,

@@ -6,6 +6,8 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
+
+  // Cron path: generate for all configs scheduled for the current hour
   if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
     const { createClient: createServiceClient } = await import("@supabase/supabase-js");
     const supabase = createServiceClient(
@@ -13,21 +15,44 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const { data: users } = await supabase.from("user_settings").select("user_id").limit(1);
-    if (!users || users.length === 0) {
-      return NextResponse.json({ error: "No users found" }, { status: 404 });
+    const now = new Date();
+    const currentHour = String(now.getUTCHours()).padStart(2, "0") + ":00";
+    const nextHour = String((now.getUTCHours() + 1) % 24).padStart(2, "0") + ":00";
+
+    const { data: configs } = await supabase
+      .from("digest_configs")
+      .select("id, user_id")
+      .eq("is_active", true)
+      .gte("digest_time", currentHour)
+      .lt("digest_time", nextHour);
+
+    if (!configs || configs.length === 0) {
+      return NextResponse.json({ message: "No configs scheduled for this hour" }, { status: 200 });
     }
 
-    const digestId = await generateDigest(users[0].user_id, "scheduled");
-    return NextResponse.json({ digestId, status: "processing" });
+    const results = [];
+    for (const config of configs) {
+      try {
+        const digestId = await generateDigest(config.user_id, "scheduled", config.id);
+        results.push({ configId: config.id, digestId, status: "processing" });
+      } catch (error) {
+        results.push({ configId: config.id, error: String(error) });
+      }
+    }
+
+    return NextResponse.json({ results });
   }
 
+  // User-triggered path
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const body = await request.json().catch(() => ({}));
+  const digestConfigId = body.digestConfigId as string | undefined;
+
   try {
-    const digestId = await generateDigest(user.id, "on_demand");
+    const digestId = await generateDigest(user.id, "on_demand", digestConfigId);
     return NextResponse.json({ digestId, status: "processing" });
   } catch (error) {
     return NextResponse.json({ error: `Generation failed: ${error}` }, { status: 500 });
