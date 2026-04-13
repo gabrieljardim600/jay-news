@@ -8,9 +8,34 @@ export interface UserSettings {
   updated_at: string;
 }
 
+export interface DigestConfig {
+  id: string;
+  user_id: string;
+  name: string;
+  icon: string;
+  color: string;
+  language: string;
+  summary_style: "executive" | "detailed";
+  digest_time: string;
+  max_articles: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SourceTestResult {
+  status: "success" | "error";
+  feed_name?: string;
+  total_articles?: number;
+  sample_articles?: { title: string; published_at: string | null; url: string }[];
+  error_code?: string;
+  error_message?: string;
+}
+
 export interface Topic {
   id: string;
   user_id: string;
+  digest_config_id: string;
   name: string;
   keywords: string[];
   priority: "high" | "medium" | "low";
@@ -21,9 +46,11 @@ export interface Topic {
 export interface RssSource {
   id: string;
   user_id: string;
+  digest_config_id: string;
   name: string;
   url: string;
   topic_id: string | null;
+  weight: number;
   is_active: boolean;
   created_at: string;
 }
@@ -31,6 +58,7 @@ export interface RssSource {
 export interface Alert {
   id: string;
   user_id: string;
+  digest_config_id: string;
   title: string;
   query: string;
   is_active: boolean;
@@ -41,6 +69,7 @@ export interface Alert {
 export interface Exclusion {
   id: string;
   user_id: string;
+  digest_config_id: string;
   keyword: string;
   is_active: boolean;
   created_at: string;
@@ -49,6 +78,7 @@ export interface Exclusion {
 export interface Digest {
   id: string;
   user_id: string;
+  digest_config_id: string | null;
   generated_at: string;
   type: "scheduled" | "on_demand";
   status: "processing" | "completed" | "failed";
