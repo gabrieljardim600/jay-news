@@ -22,7 +22,7 @@ export function ThemeToggle() {
     <button
       onClick={toggle}
       title="Alternar tema"
-      className="w-9 h-9 flex items-center justify-center rounded-md text-text-secondary hover:text-text hover:bg-surface transition-colors text-base"
+      className="w-9 h-9 flex items-center justify-center rounded-md text-text-secondary hover:text-text hover:bg-surface transition-colors"
     >
       {theme === "dark" ? "☀" : "🌙"}
     </button>
