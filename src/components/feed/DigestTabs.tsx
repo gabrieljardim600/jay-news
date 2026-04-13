@@ -20,10 +20,10 @@ export function DigestTabs({ configs, activeId, onSelect }: DigestTabsProps) {
           <button
             key={config.id}
             onClick={() => onSelect(config.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-all border-b-[3px] -mb-px ${
               isActive
                 ? "text-white border-current"
-                : "text-text-secondary border-transparent hover:text-text hover:border-border"
+                : "text-text-muted border-transparent hover:text-text hover:border-border"
             }`}
             style={isActive ? { borderColor: config.color, color: config.color } : undefined}
           >
@@ -34,7 +34,7 @@ export function DigestTabs({ configs, activeId, onSelect }: DigestTabsProps) {
       })}
       <button
         onClick={() => router.push("/wizard")}
-        className="flex items-center px-3 py-2.5 text-sm text-text-muted hover:text-text border-b-2 border-transparent -mb-px transition-all whitespace-nowrap"
+        className="flex items-center px-3 py-2.5 text-sm text-text-muted hover:text-primary border-b-[3px] border-transparent -mb-px transition-all whitespace-nowrap"
         title="Novo digest"
       >
         + Novo
