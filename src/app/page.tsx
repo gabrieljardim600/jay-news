@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
 import { DigestTabs } from "@/components/feed/DigestTabs";
 import { DaySummary } from "@/components/digest/DaySummary";
 import { HighlightCards } from "@/components/digest/HighlightCards";
@@ -19,6 +21,7 @@ export default function FeedPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const router = useRouter();
 
   // Load configs on mount
@@ -103,38 +106,23 @@ export default function FeedPage() {
   const activeConfig = configs.find((c) => c.id === activeConfigId);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
+    return <FeedSkeleton />;
   }
 
   return (
     <div className="min-h-screen max-w-4xl mx-auto px-4 py-8">
-      <header className="flex items-center justify-between mb-4">
+      <header className="flex items-center justify-between mb-2">
         <div>
-          <h1 className="text-2xl font-bold font-heading">JNews</h1>
-          {current && (
-            <p className="text-text-secondary text-sm">
-              {new Date(current.generated_at).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-          )}
+          <h1 className="text-3xl font-bold font-heading">JNews</h1>
+          <p className="text-sm text-text-secondary">
+            {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <ThemeToggle />
+          <Button variant="ghost" onClick={() => setShowSettings(true)} title="Configurações">⚙</Button>
           <Button onClick={handleGenerate} loading={generating}>
             {generating ? "Gerando..." : "Gerar Digest"}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => router.push(`/settings?configId=${activeConfigId}`)}
-            title="Configuracoes"
-          >
-            ⚙
           </Button>
         </div>
       </header>
@@ -149,14 +137,9 @@ export default function FeedPage() {
 
       {!current && digests.length === 0 && (
         <div className="text-center py-20">
-          <p className="text-text-secondary text-lg mb-2">
-            {activeConfig
-              ? `Nenhum digest gerado para "${activeConfig.icon} ${activeConfig.name}" ainda.`
-              : "Nenhum digest gerado ainda."}
-          </p>
-          <p className="text-text-muted text-sm mb-6">
-            Clique em &quot;Gerar Digest&quot; para criar o primeiro.
-          </p>
+          <div className="text-5xl mb-4">📭</div>
+          <p className="text-text-secondary text-lg mb-2">Nenhum digest ainda</p>
+          <p className="text-text-muted text-sm mb-6">Clique em &quot;Gerar Digest&quot; para criar o primeiro.</p>
         </div>
       )}
 
