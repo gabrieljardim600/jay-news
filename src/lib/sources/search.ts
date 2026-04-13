@@ -24,7 +24,6 @@ export async function searchTavily(
 
   try {
     const body: Record<string, unknown> = {
-      api_key: apiKey,
       query,
       max_results: maxResults,
       search_depth: "basic",
@@ -36,12 +35,16 @@ export async function searchTavily(
 
     const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      console.error(`Tavily search failed: ${response.status}`);
+      const errText = await response.text().catch(() => "");
+      console.error(`Tavily search failed: ${response.status} — ${errText.slice(0, 200)}`);
       return [];
     }
 

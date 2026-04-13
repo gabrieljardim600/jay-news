@@ -42,6 +42,16 @@ export async function GET(request: Request) {
     }
   }
 
+  // Test Tavily directly with raw fetch to see status
+  const tavilyKey = process.env.TAVILY_API_KEY;
+  const tavilyRawTest = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${tavilyKey}` },
+    body: JSON.stringify({ query: "test", max_results: 1, search_depth: "basic" }),
+  });
+  const tavilyRawStatus = tavilyRawTest.status;
+  const tavilyRawBody = await tavilyRawTest.text().catch(() => "");
+
   // Test Tavily queries
   for (const q of TAVILY_QUERIES) {
     try {
@@ -55,5 +65,9 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ rss: rssResults, tavily: tavilyResults });
+  return NextResponse.json({
+    rss: rssResults,
+    tavily: tavilyResults,
+    tavily_raw_test: { status: tavilyRawStatus, body: tavilyRawBody.slice(0, 300) },
+  });
 }
