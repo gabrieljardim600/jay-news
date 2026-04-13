@@ -11,6 +11,7 @@ import { HighlightCards } from "@/components/digest/HighlightCards";
 import { CategorySection } from "@/components/digest/CategorySection";
 import { AlertsSection } from "@/components/digest/AlertsSection";
 import { DigestDateSelector } from "@/components/digest/DigestDateSelector";
+import { TrendingSection } from "@/components/feed/TrendingSection";
 import type { Digest, DigestConfig, DigestWithArticles, Topic } from "@/types";
 
 export default function FeedPage() {
@@ -146,6 +147,9 @@ export default function FeedPage() {
       {current && (
         <div className="flex flex-col gap-6 mt-6">
           <DaySummary summary={current.summary} />
+          {current.metadata?.trends && current.metadata.trends.length > 0 && (
+            <TrendingSection trends={current.metadata.trends} />
+          )}
           <HighlightCards articles={current.highlights} />
           {Object.entries(current.by_topic)
             .filter(([key]) => key !== "uncategorized")
