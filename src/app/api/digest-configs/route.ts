@@ -1,27 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { isValidRssUrl } from "@/lib/sources/validate-url";
 
-export async function GET(request: Request) {
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(request.url);
-  const digestConfigId = searchParams.get("digestConfigId");
-
-  let query = supabase
-    .from("rss_sources")
+  const { data, error } = await supabase
+    .from("digest_configs")
     .select("*")
     .eq("user_id", user.id)
     .eq("is_active", true)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
-  if (digestConfigId) {
-    query = query.eq("digest_config_id", digestConfigId);
-  }
-
-  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
@@ -33,16 +24,21 @@ export async function POST(request: Request) {
 
   const body = await request.json();
 
-  if (!body.url || !isValidRssUrl(body.url)) {
-    return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
+  if (!body.name?.trim()) {
+    return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
   const { data, error } = await supabase
-    .from("rss_sources")
+    .from("digest_configs")
     .insert({
-      ...body,
       user_id: user.id,
-      weight: body.weight ?? 3,
+      name: body.name.trim(),
+      icon: body.icon || "📰",
+      color: body.color || "#fb830e",
+      language: body.language || "pt-BR",
+      summary_style: body.summary_style || "executive",
+      digest_time: body.digest_time || "07:00",
+      max_articles: Math.min(50, Math.max(5, body.max_articles || 20)),
     })
     .select()
     .single();
@@ -59,13 +55,11 @@ export async function PUT(request: Request) {
   const body = await request.json();
   const { id, ...updates } = body;
 
-  if (updates.url && !isValidRssUrl(updates.url)) {
-    return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
-  }
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const { data, error } = await supabase
-    .from("rss_sources")
-    .update(updates)
+    .from("digest_configs")
+    .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id)
     .select()
@@ -85,8 +79,8 @@ export async function DELETE(request: Request) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const { error } = await supabase
-    .from("rss_sources")
-    .update({ is_active: false })
+    .from("digest_configs")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id);
 

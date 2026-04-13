@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/Card";
 import { ArticleRow } from "./ArticleRow";
 import type { Article } from "@/types";
 
@@ -10,13 +9,15 @@ export function AlertsSection({ articles }: AlertsSectionProps) {
   if (!articles || articles.length === 0) return null;
 
   return (
-    <Card className="border-l-4 border-l-primary">
-      <h2 className="text-lg font-semibold mb-2">Alertas</h2>
+    <div className="border-l-4 border-l-primary pl-4 py-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">
+        ⚡ Alertas
+      </p>
       <div className="flex flex-col">
         {articles.map((article) => (
           <ArticleRow key={article.id} article={article} />
         ))}
       </div>
-    </Card>
+    </div>
   );
 }

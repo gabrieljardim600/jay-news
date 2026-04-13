@@ -1,6 +1,6 @@
 import { getAnthropicClient } from "@/lib/anthropic/client";
 import { buildBatchPrompt, buildDaySummaryPrompt } from "@/lib/anthropic/prompts";
-import type { RawArticle, Topic, ProcessedArticle } from "@/types";
+import type { RawArticle, RssSource, Topic, ProcessedArticle } from "@/types";
 
 const BATCH_SIZE = 10;
 
@@ -31,7 +31,7 @@ async function processBatch(articles: RawArticle[], topics: Topic[], language: s
   }
 }
 
-export async function processArticles(rawArticles: RawArticle[], topics: Topic[], language: string, style: string): Promise<ProcessedArticle[]> {
+export async function processArticles(rawArticles: RawArticle[], topics: Topic[], language: string, style: string, sources?: RssSource[]): Promise<ProcessedArticle[]> {
   const processed: ProcessedArticle[] = [];
 
   for (let i = 0; i < rawArticles.length; i += BATCH_SIZE) {
@@ -66,6 +66,17 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
         image_url: raw.image_url || null,
         published_at: raw.published_at || null,
       });
+    }
+  }
+
+  // Apply weight boost from source config, then re-sort
+  if (sources && sources.length > 0) {
+    const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
+    for (const article of processed) {
+      const source = sourceByName[article.source_name];
+      if (source) {
+        article.relevance_score = Math.min(1.0, article.relevance_score * (1 + (source.weight - 3) * 0.1));
+      }
     }
   }
 

@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { fetchAllRssFeeds } from "@/lib/sources/rss";
-import { searchAllTopics } from "@/lib/sources/search";
+import { fetchRawArticles } from "@/lib/sources/fetcher";
 import { filterArticles } from "@/lib/digest/filter";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
-import type { Topic, RssSource, Alert, Exclusion, UserSettings } from "@/types";
+import { computeTrends } from "@/lib/digest/trends";
+import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
 function getServiceClient() {
   return createClient(
@@ -12,21 +12,42 @@ function getServiceClient() {
   );
 }
 
-export async function generateDigest(userId: string, type: "scheduled" | "on_demand"): Promise<string> {
+export async function generateDigest(userId: string, type: "scheduled" | "on_demand", digestConfigId?: string): Promise<string> {
   const supabase = getServiceClient();
 
-  const [settingsRes, topicsRes, sourcesRes, alertsRes, exclusionsRes] = await Promise.all([
-    supabase.from("user_settings").select("*").eq("user_id", userId).single(),
-    supabase.from("topics").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("rss_sources").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("alerts").select("*").eq("user_id", userId).eq("is_active", true),
-    supabase.from("exclusions").select("*").eq("user_id", userId).eq("is_active", true),
+  // Load digest config settings
+  let settings: { language: string; summary_style: string; max_articles: number };
+
+  if (digestConfigId) {
+    const { data: config } = await supabase
+      .from("digest_configs")
+      .select("language, summary_style, max_articles")
+      .eq("id", digestConfigId)
+      .single();
+
+    if (!config) throw new Error(`Digest config not found: ${digestConfigId}`);
+    settings = config;
+  } else {
+    const { data: settingsData } = await supabase
+      .from("user_settings")
+      .select("language, summary_style, max_articles")
+      .eq("user_id", userId)
+      .single();
+    settings = settingsData || { language: "pt-BR", summary_style: "executive", max_articles: 20 };
+  }
+
+  // Load config-scoped data
+  const configFilter = digestConfigId
+    ? { column: "digest_config_id" as const, value: digestConfigId }
+    : { column: "user_id" as const, value: userId };
+
+  const [topicsRes, sourcesRes, alertsRes, exclusionsRes] = await Promise.all([
+    supabase.from("topics").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("rss_sources").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("alerts").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
+    supabase.from("exclusions").select("*").eq(configFilter.column, configFilter.value).eq("is_active", true),
   ]);
 
-  const settings: UserSettings = settingsRes.data || {
-    user_id: userId, digest_time: "07:00", language: "pt-BR", summary_style: "executive",
-    max_articles: 20, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-  };
   const topics: Topic[] = topicsRes.data || [];
   const sources: RssSource[] = sourcesRes.data || [];
   const alerts: Alert[] = alertsRes.data || [];
@@ -34,52 +55,60 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
   const { data: digest, error: digestError } = await supabase
     .from("digests")
-    .insert({ user_id: userId, type, status: "processing" })
+    .insert({ user_id: userId, type, status: "processing", digest_config_id: digestConfigId || null })
     .select()
     .single();
 
   if (digestError || !digest) throw new Error(`Failed to create digest: ${digestError?.message}`);
 
   try {
-    const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
+    let allRaw: RawArticle[] = [];
 
-    // Build focused search queries per topic using top 3 keywords + language context
-    const topicQueries = topics.flatMap((t) => {
-      const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
-      const topKeywords = t.keywords.slice(0, 3).join(" ");
-      const lang = settings.language === "pt-BR" ? "Brasil noticias" : "news";
-      return [{ query: `${topKeywords} ${lang}`, maxResults }];
-    });
+    // Try pre-fetched articles first (last 7 days)
+    if (digestConfigId) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: storedRows } = await supabase
+        .from("fetched_articles")
+        .select("title, url, content, source_name, image_url, published_at")
+        .eq("digest_config_id", digestConfigId)
+        .gte("fetched_at", sevenDaysAgo)
+        .order("fetched_at", { ascending: false })
+        .limit(300);
 
-    // Dedicated The News search — priority source, always included
-    const theNewsQueries = [
-      { query: "the news newsletter brasil hoje", maxResults: 5, includeDomains: ["thenewscc.beehiiv.com"] },
-    ];
+      if (storedRows && storedRows.length > 0) {
+        allRaw = storedRows.map((r) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content || "",
+          source_name: r.source_name,
+          image_url: r.image_url ?? undefined,
+          published_at: r.published_at ?? undefined,
+        }));
+      }
+    }
 
-    // Alert queries
-    const alertQueries = alerts
-      .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
-      .map((a) => ({ query: a.query, maxResults: 5 }));
+    // Fall back to live fetch if no pre-fetched articles
+    if (allRaw.length === 0) {
+      allRaw = await fetchRawArticles(topics, sources, alerts, settings.language);
 
-    const searchQueries = [...theNewsQueries, ...topicQueries, ...alertQueries];
+      // Store for future use
+      if (allRaw.length > 0 && digestConfigId) {
+        const rows = allRaw.map((a) => ({
+          digest_config_id: digestConfigId,
+          url: a.url,
+          title: a.title,
+          content: a.content || null,
+          source_name: a.source_name,
+          image_url: a.image_url || null,
+          published_at: a.published_at || null,
+          fetched_at: new Date().toISOString(),
+        }));
+        await supabase
+          .from("fetched_articles")
+          .upsert(rows, { onConflict: "digest_config_id,url" });
+      }
+    }
 
-    const [rssArticles, searchArticles] = await Promise.all([
-      fetchAllRssFeeds(rssFeeds),
-      searchAllTopics(searchQueries),
-    ]);
-
-    // Interleave to ensure topic-based Tavily results aren't all cut off by RSS volume
-    // Cap RSS per-source at 5 to prevent any single feed from dominating
-    const cappedRss = Object.values(
-      rssArticles.reduce<Record<string, typeof rssArticles>>((acc, a) => {
-        if (!acc[a.source_name]) acc[a.source_name] = [];
-        if (acc[a.source_name].length < 5) acc[a.source_name].push(a);
-        return acc;
-      }, {})
-    ).flat();
-
-    // Tavily results first, then RSS — ensures topic searches are represented
-    const allRaw = [...searchArticles, ...cappedRss];
     const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
     if (filtered.length === 0) {
@@ -87,7 +116,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       return digest.id;
     }
 
-    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style);
+    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style, sources);
 
     const articleRows = processed.map((a) => ({
       digest_id: digest.id,
@@ -106,15 +135,19 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     await supabase.from("articles").insert(articleRows);
 
     const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+    const trends = await computeTrends(digestConfigId ?? "", digest.id, supabase);
+
+    const metadata: DigestMetadata = {
+      total_articles: processed.length,
+      sources_count: new Set(processed.map((a) => a.source_name)).size,
+      topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
+      ...(trends.length > 0 ? { trends } : {}),
+    };
 
     await supabase.from("digests").update({
       status: "completed",
       summary: daySummary,
-      metadata: {
-        total_articles: processed.length,
-        sources_count: new Set(processed.map((a) => a.source_name)).size,
-        topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
-      },
+      metadata,
     }).eq("id", digest.id);
 
     return digest.id;
