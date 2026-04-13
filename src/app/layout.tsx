@@ -26,6 +26,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={`${sora.variable} ${inter.variable}`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('jnews-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.add(t||(d?'dark':'light'));})()`,
+          }}
+        />
+      </head>
       <body className="antialiased">{children}</body>
     </html>
   );
