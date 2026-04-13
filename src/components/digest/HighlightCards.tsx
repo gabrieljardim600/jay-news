@@ -49,7 +49,7 @@ export function HighlightCards({ articles }: HighlightCardsProps) {
                 <div className="w-full h-32 mb-3 rounded bg-surface-light flex items-center justify-center text-text-muted text-xs">{article.source_name}</div>
               )
             )}
-            <h3 className={`font-semibold text-text mb-1${i === 0 ? " text-lg font-bold leading-snug" : ""}`}>{article.title}</h3>
+            <h3 className={i === 0 ? "text-lg font-bold leading-snug text-text mb-1" : "font-semibold text-text mb-1"}>{article.title}</h3>
             <p className={`text-sm text-text-secondary mb-2${i === 0 ? " line-clamp-3" : " line-clamp-2"}`}>
               {article.summary}
             </p>
