@@ -21,19 +21,36 @@ export function HighlightCards({ articles }: HighlightCardsProps) {
           rel="noopener noreferrer"
           className={i === 0 ? "md:col-span-2" : ""}
         >
-          <Card className="h-full hover:border-primary/40 transition-colors">
-            {article.image_url && (
-              <div className="relative w-full h-40 mb-3 rounded overflow-hidden bg-surface">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={article.image_url}
-                  alt={article.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
+          <Card className="h-full hover:border-primary/40 hover:shadow-lg hover:shadow-black/10 transition-colors">
+            {i === 0 ? (
+              article.image_url ? (
+                <div className="relative w-full h-48 mb-3 rounded overflow-hidden bg-surface">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={article.image_url}
+                    alt={article.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-48 mb-3 rounded bg-surface-light flex items-center justify-center text-text-muted text-xs">{article.source_name}</div>
+              )
+            ) : (
+              article.image_url ? (
+                <div className="relative w-full h-32 mb-3 rounded overflow-hidden bg-surface">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={article.image_url}
+                    alt={article.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-32 mb-3 rounded bg-surface-light flex items-center justify-center text-text-muted text-xs">{article.source_name}</div>
+              )
             )}
-            <h3 className="font-semibold text-text mb-1">{article.title}</h3>
-            <p className="text-sm text-text-secondary line-clamp-2 mb-2">
+            <h3 className={`font-semibold text-text mb-1${i === 0 ? " text-lg font-bold leading-snug" : ""}`}>{article.title}</h3>
+            <p className={`text-sm text-text-secondary mb-2${i === 0 ? " line-clamp-3" : " line-clamp-2"}`}>
               {article.summary}
             </p>
             <Badge>{article.source_name}</Badge>
