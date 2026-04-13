@@ -9,9 +9,10 @@ import type { Alert } from "@/types";
 interface AlertsListProps {
   alerts: Alert[];
   onRefresh: () => void;
+  configId: string;
 }
 
-export function AlertsList({ alerts, onRefresh }: AlertsListProps) {
+export function AlertsList({ alerts, onRefresh, configId }: AlertsListProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Alert | undefined>();
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,7 @@ export function AlertsList({ alerts, onRefresh }: AlertsListProps) {
         await fetch("/api/alerts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, digest_config_id: configId }),
         });
       }
       setModalOpen(false);

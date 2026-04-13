@@ -10,9 +10,10 @@ import type { Topic } from "@/types";
 interface TopicsListProps {
   topics: Topic[];
   onRefresh: () => void;
+  configId: string;
 }
 
-export function TopicsList({ topics, onRefresh }: TopicsListProps) {
+export function TopicsList({ topics, onRefresh, configId }: TopicsListProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Topic | undefined>();
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export function TopicsList({ topics, onRefresh }: TopicsListProps) {
         await fetch("/api/topics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, digest_config_id: configId }),
         });
       }
       setModalOpen(false);

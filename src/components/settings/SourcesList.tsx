@@ -4,15 +4,17 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SourceModal } from "./SourceModal";
+import { WeightStars } from "@/components/wizard/WeightStars";
 import type { RssSource, Topic } from "@/types";
 
 interface SourcesListProps {
   sources: RssSource[];
   topics: Topic[];
   onRefresh: () => void;
+  configId: string;
 }
 
-export function SourcesList({ sources, topics, onRefresh }: SourcesListProps) {
+export function SourcesList({ sources, topics, onRefresh, configId }: SourcesListProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<RssSource | undefined>();
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ export function SourcesList({ sources, topics, onRefresh }: SourcesListProps) {
   const getTopicName = (topicId: string | null) =>
     topics.find((t) => t.id === topicId)?.name || "—";
 
-  async function handleSave(data: { name: string; url: string; topic_id: string | null }) {
+  async function handleSave(data: { name: string; url: string; topic_id: string | null; weight: number }) {
     setLoading(true);
     try {
       if (editing) {
@@ -33,7 +35,7 @@ export function SourcesList({ sources, topics, onRefresh }: SourcesListProps) {
         await fetch("/api/sources", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          body: JSON.stringify({ ...data, digest_config_id: configId }),
         });
       }
       setModalOpen(false);
@@ -75,6 +77,7 @@ export function SourcesList({ sources, topics, onRefresh }: SourcesListProps) {
             <div className="flex flex-col gap-0.5">
               <span className="font-medium">{source.name}</span>
               <span className="text-xs text-text-muted">{getTopicName(source.topic_id)}</span>
+              <WeightStars value={source.weight ?? 3} onChange={() => {}} readOnly size="sm" />
             </div>
             <div className="flex gap-1">
               <Button

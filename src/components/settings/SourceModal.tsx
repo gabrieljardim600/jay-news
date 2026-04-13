@@ -5,12 +5,13 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { WeightStars } from "@/components/wizard/WeightStars";
 import type { RssSource, Topic } from "@/types";
 
 interface SourceModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; url: string; topic_id: string | null }) => void;
+  onSave: (data: { name: string; url: string; topic_id: string | null; weight: number }) => void;
   source?: RssSource;
   topics: Topic[];
   loading?: boolean;
@@ -20,22 +21,25 @@ export function SourceModal({ open, onClose, onSave, source, topics, loading }: 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [topicId, setTopicId] = useState("");
+  const [weight, setWeight] = useState(3);
 
   useEffect(() => {
     if (source) {
       setName(source.name);
       setUrl(source.url);
       setTopicId(source.topic_id || "");
+      setWeight(source.weight ?? 3);
     } else {
       setName("");
       setUrl("");
       setTopicId("");
+      setWeight(3);
     }
   }, [source, open]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSave({ name, url, topic_id: topicId || null });
+    onSave({ name, url, topic_id: topicId || null, weight });
   }
 
   const topicOptions = [
@@ -66,6 +70,13 @@ export function SourceModal({ open, onClose, onSave, source, topics, loading }: 
           onChange={(e) => setTopicId(e.target.value)}
           options={topicOptions}
         />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-text-secondary">Peso</label>
+          <WeightStars value={weight} onChange={setWeight} size="md" />
+          <p className="text-xs text-text-muted">
+            Afeta o limite de artigos ({weight * 2} artigos max) e o boost de relevância
+          </p>
+        </div>
         <div className="flex justify-end gap-2 mt-2">
           <Button variant="ghost" type="button" onClick={onClose}>
             Cancelar
