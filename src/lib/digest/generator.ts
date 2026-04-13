@@ -2,7 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchRawArticles } from "@/lib/sources/fetcher";
 import { filterArticles } from "@/lib/digest/filter";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
-import type { RawArticle, Topic, RssSource, Alert, Exclusion } from "@/types";
+import { computeTrends } from "@/lib/digest/trends";
+import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
 function getServiceClient() {
   return createClient(
@@ -134,15 +135,19 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     await supabase.from("articles").insert(articleRows);
 
     const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+    const trends = await computeTrends(digestConfigId ?? "", digest.id, supabase);
+
+    const metadata: DigestMetadata = {
+      total_articles: processed.length,
+      sources_count: new Set(processed.map((a) => a.source_name)).size,
+      topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
+      ...(trends.length > 0 ? { trends } : {}),
+    };
 
     await supabase.from("digests").update({
       status: "completed",
       summary: daySummary,
-      metadata: {
-        total_articles: processed.length,
-        sources_count: new Set(processed.map((a) => a.source_name)).size,
-        topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
-      },
+      metadata,
     }).eq("id", digest.id);
 
     return digest.id;
