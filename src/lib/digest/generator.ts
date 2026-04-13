@@ -1,9 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { fetchAllRssFeeds } from "@/lib/sources/rss";
-import { searchAllTopics } from "@/lib/sources/search";
+import { fetchRawArticles } from "@/lib/sources/fetcher";
 import { filterArticles } from "@/lib/digest/filter";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
-import type { Topic, RssSource, Alert, Exclusion } from "@/types";
+import type { RawArticle, Topic, RssSource, Alert, Exclusion } from "@/types";
 
 function getServiceClient() {
   return createClient(
@@ -62,43 +61,53 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
   if (digestError || !digest) throw new Error(`Failed to create digest: ${digestError?.message}`);
 
   try {
-    const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
+    let allRaw: RawArticle[] = [];
 
-    const topicQueries = topics.flatMap((t) => {
-      const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
-      const topKeywords = t.keywords.slice(0, 3).join(" ");
-      const lang = settings.language === "pt-BR" ? "Brasil noticias" : "news";
-      return [{ query: `${topKeywords} ${lang}`, maxResults }];
-    });
+    // Try pre-fetched articles first (last 7 days)
+    if (digestConfigId) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: storedRows } = await supabase
+        .from("fetched_articles")
+        .select("title, url, content, source_name, image_url, published_at")
+        .eq("digest_config_id", digestConfigId)
+        .gte("fetched_at", sevenDaysAgo)
+        .order("fetched_at", { ascending: false })
+        .limit(300);
 
-    const theNewsQueries = [
-      { query: "the news newsletter brasil hoje", maxResults: 5, includeDomains: ["thenewscc.beehiiv.com"] },
-    ];
+      if (storedRows && storedRows.length > 0) {
+        allRaw = storedRows.map((r) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content || "",
+          source_name: r.source_name,
+          image_url: r.image_url ?? undefined,
+          published_at: r.published_at ?? undefined,
+        }));
+      }
+    }
 
-    const alertQueries = alerts
-      .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
-      .map((a) => ({ query: a.query, maxResults: 5 }));
+    // Fall back to live fetch if no pre-fetched articles
+    if (allRaw.length === 0) {
+      allRaw = await fetchRawArticles(topics, sources, alerts, settings.language);
 
-    const searchQueries = [...theNewsQueries, ...topicQueries, ...alertQueries];
+      // Store for future use
+      if (allRaw.length > 0 && digestConfigId) {
+        const rows = allRaw.map((a) => ({
+          digest_config_id: digestConfigId,
+          url: a.url,
+          title: a.title,
+          content: a.content || null,
+          source_name: a.source_name,
+          image_url: a.image_url || null,
+          published_at: a.published_at || null,
+          fetched_at: new Date().toISOString(),
+        }));
+        await supabase
+          .from("fetched_articles")
+          .upsert(rows, { onConflict: "digest_config_id,url" });
+      }
+    }
 
-    const [rssArticles, searchArticles] = await Promise.all([
-      fetchAllRssFeeds(rssFeeds),
-      searchAllTopics(searchQueries),
-    ]);
-
-    // Cap RSS per-source based on weight (weight * 2, default 3 → cap 6)
-    const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
-    const cappedRss = Object.values(
-      rssArticles.reduce<Record<string, typeof rssArticles>>((acc, a) => {
-        const source = sourceByName[a.source_name];
-        const cap = source ? source.weight * 2 : 6;
-        if (!acc[a.source_name]) acc[a.source_name] = [];
-        if (acc[a.source_name].length < cap) acc[a.source_name].push(a);
-        return acc;
-      }, {})
-    ).flat();
-
-    const allRaw = [...searchArticles, ...cappedRss];
     const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
     if (filtered.length === 0) {
