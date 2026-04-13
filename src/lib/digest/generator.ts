@@ -53,7 +53,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
     // Dedicated The News search — priority source, always included
     const theNewsQueries = [
-      { query: "noticias tecnologia negocios hoje", maxResults: 8, includeDomains: ["thenewscc.beehiiv.com"] },
+      { query: "the news newsletter brasil hoje", maxResults: 5, includeDomains: ["thenewscc.beehiiv.com"] },
     ];
 
     // Alert queries
@@ -68,8 +68,19 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       searchAllTopics(searchQueries),
     ]);
 
-    const allRaw = [...rssArticles, ...searchArticles];
-    const filtered = filterArticles(allRaw, exclusions).slice(0, settings.max_articles);
+    // Interleave to ensure topic-based Tavily results aren't all cut off by RSS volume
+    // Cap RSS per-source at 5 to prevent any single feed from dominating
+    const cappedRss = Object.values(
+      rssArticles.reduce<Record<string, typeof rssArticles>>((acc, a) => {
+        if (!acc[a.source_name]) acc[a.source_name] = [];
+        if (acc[a.source_name].length < 5) acc[a.source_name].push(a);
+        return acc;
+      }, {})
+    ).flat();
+
+    // Tavily results first, then RSS — ensures topic searches are represented
+    const allRaw = [...searchArticles, ...cappedRss];
+    const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
     if (filtered.length === 0) {
       await supabase.from("digests").update({ status: "completed", summary: "Nenhuma noticia encontrada para hoje." }).eq("id", digest.id);

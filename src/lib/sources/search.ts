@@ -28,6 +28,7 @@ export async function searchTavily(
       max_results: maxResults,
       search_depth: "basic",
       include_answer: false,
+      topic: "news",
     };
     if (includeDomains && includeDomains.length > 0) {
       body.include_domains = includeDomains;
