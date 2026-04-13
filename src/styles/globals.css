@@ -1,9 +1,7 @@
 @import "tailwindcss";
 
+/* ─── Invariant tokens — baked at build time ─────────────────────────── */
 @theme {
-  --color-background: #151515;
-  --color-card: rgba(28, 29, 30, 0.8);
-  --color-card-solid: #1c1d1e;
   --color-primary: #fb830e;
   --color-primary-hover: #fba24b;
   --color-secondary: #08a6ff;
@@ -11,17 +9,56 @@
   --color-danger: #f54336;
   --color-success: #75f94c;
   --color-gold: #c0b662;
-  --color-text: #ffffff;
-  --color-text-secondary: #828282;
-  --color-text-muted: #4f4f4f;
-  --color-border: #333333;
-  --color-surface: #1d1d1d;
-  --color-surface-light: #282828;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --font-heading: 'Sora', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+}
+
+/* ─── Switchable tokens — utilities reference CSS vars at runtime ─────── */
+@theme inline {
+  --color-background: var(--jn-bg);
+  --color-card: var(--jn-card);
+  --color-card-solid: var(--jn-card-solid);
+  --color-surface: var(--jn-surface);
+  --color-surface-light: var(--jn-surface-light);
+  --color-border: var(--jn-border);
+  --color-text: var(--jn-text);
+  --color-text-secondary: var(--jn-text-secondary);
+  --color-text-muted: var(--jn-text-muted);
+}
+
+/* ─── Dark theme (default) ────────────────────────────────────────────── */
+:root,
+html.dark {
+  --jn-bg: #151515;
+  --jn-card: rgba(28, 29, 30, 0.8);
+  --jn-card-solid: #1c1d1e;
+  --jn-surface: #1d1d1d;
+  --jn-surface-light: #282828;
+  --jn-border: #333333;
+  --jn-text: #ffffff;
+  --jn-text-secondary: #828282;
+  --jn-text-muted: #4f4f4f;
+}
+
+/* ─── Light theme ─────────────────────────────────────────────────────── */
+html.light {
+  --jn-bg: #f8f7f4;
+  --jn-card: #ffffff;
+  --jn-card-solid: #ffffff;
+  --jn-surface: #f1f0ed;
+  --jn-surface-light: #e8e7e4;
+  --jn-border: #e0deda;
+  --jn-text: #111111;
+  --jn-text-secondary: #555555;
+  --jn-text-muted: #999999;
+}
+
+/* ─── Base styles ─────────────────────────────────────────────────────── */
+html {
+  transition: background-color 0.2s, color 0.2s;
 }
 
 body {
