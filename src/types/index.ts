@@ -83,7 +83,7 @@ export interface Digest {
   type: "scheduled" | "on_demand";
   status: "processing" | "completed" | "failed";
   summary: string | null;
-  metadata: Record<string, unknown>;
+  metadata: DigestMetadata;
 }
 
 export interface Article {
@@ -122,6 +122,21 @@ export interface ProcessedArticle {
   is_highlight: boolean;
   image_url: string | null;
   published_at: string | null;
+}
+
+export interface TrendItem {
+  title: string;
+  description: string;
+  days_active: number;
+  article_count: number;
+}
+
+export interface DigestMetadata {
+  total_articles?: number;
+  sources_count?: number;
+  topics_count?: number;
+  trends?: TrendItem[];
+  error?: string;
 }
 
 export interface DigestWithArticles extends Digest {
