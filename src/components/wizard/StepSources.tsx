@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { WeightStars } from "./WeightStars";
 import { SourceTestCard } from "./SourceTestCard";
+import { SourceSuggestions } from "@/components/settings/SourceSuggestions";
 import type { SourceTestResult } from "@/types";
 
 export interface WizardSource {
@@ -131,6 +132,20 @@ export function StepSources({ interests, sources, onSourcesChange }: StepSources
     onSourcesChange(updated);
   }
 
+  function handleSuggestionAdd(suggestion: {
+    name: string;
+    url: string;
+    topic_name: string | null;
+  }) {
+    addSource({
+      name: suggestion.name,
+      url: suggestion.url,
+      weight: 3,
+      interest: suggestion.topic_name,
+      testResult: null,
+    });
+  }
+
   const sections = [
     ...interests.map((interest) => ({ label: interest, key: interest as string | null })),
     { label: "Fontes gerais", key: null as string | null },
@@ -138,6 +153,7 @@ export function StepSources({ interests, sources, onSourcesChange }: StepSources
 
   return (
     <div className="flex flex-col gap-5 max-w-xl mx-auto">
+      <SourceSuggestions interests={interests} onAdd={handleSuggestionAdd} />
       <div>
         <h2 className="text-xl font-bold mb-1">Adicione suas fontes</h2>
         <p className="text-text-secondary text-sm">
