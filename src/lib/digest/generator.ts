@@ -6,6 +6,8 @@ import { processArticles, generateDaySummary } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
+type Settings = { language: string; summary_style: string; max_articles: number };
+
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,11 +15,18 @@ function getServiceClient() {
   );
 }
 
-export async function generateDigest(userId: string, type: "scheduled" | "on_demand", digestConfigId?: string): Promise<string> {
+/**
+ * Create the digest record and load all config data.
+ * Returns immediately — call runDigestPipeline() to do the heavy work.
+ */
+export async function initializeDigest(
+  userId: string,
+  type: "scheduled" | "on_demand",
+  digestConfigId?: string
+): Promise<{ digestId: string; settings: Settings; topics: Topic[]; sources: RssSource[]; alerts: Alert[]; exclusions: Exclusion[] }> {
   const supabase = getServiceClient();
 
-  // Load digest config settings
-  let settings: { language: string; summary_style: string; max_articles: number };
+  let settings: Settings;
 
   if (digestConfigId) {
     const { data: config } = await supabase
@@ -25,7 +34,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       .select("language, summary_style, max_articles")
       .eq("id", digestConfigId)
       .single();
-
     if (!config) throw new Error(`Digest config not found: ${digestConfigId}`);
     settings = config;
   } else {
@@ -37,7 +45,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     settings = settingsData || { language: "pt-BR", summary_style: "executive", max_articles: 20 };
   }
 
-  // Load config-scoped data
   const configFilter = digestConfigId
     ? { column: "digest_config_id" as const, value: digestConfigId }
     : { column: "user_id" as const, value: userId };
@@ -56,22 +63,44 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
   const { data: digest, error: digestError } = await supabase
     .from("digests")
-    .insert({ user_id: userId, type, status: "processing", digest_config_id: digestConfigId || null, metadata: { progress: 5, stage: "Carregando configuracao...", source_results: [] } })
+    .insert({
+      user_id: userId,
+      type,
+      status: "processing",
+      digest_config_id: digestConfigId || null,
+      metadata: { progress: 5, stage: "Carregando configuracao...", source_results: [] },
+    })
     .select()
     .single();
 
   if (digestError || !digest) throw new Error(`Failed to create digest: ${digestError?.message}`);
 
-  // Mutable progress state
+  return { digestId: digest.id, settings, topics, sources, alerts, exclusions };
+}
+
+/**
+ * Run the full digest pipeline for an existing digest record.
+ * Writes progress updates to the DB throughout. Safe to call as fire-and-forget.
+ */
+export async function runDigestPipeline(
+  digestId: string,
+  userId: string,
+  digestConfigId: string | undefined,
+  settings: Settings,
+  topics: Topic[],
+  sources: RssSource[],
+  alerts: Alert[],
+  exclusions: Exclusion[]
+): Promise<void> {
+  const supabase = getServiceClient();
+
   const progressMeta: Record<string, unknown> = { progress: 5, stage: "Carregando configuracao...", source_results: [] };
 
   async function updateProgress(progress: number, stage: string, extra?: Record<string, unknown>) {
     progressMeta.progress = progress;
     progressMeta.stage = stage;
     if (extra) Object.assign(progressMeta, extra);
-    await supabase.from("digests").update({
-      metadata: { ...progressMeta },
-    }).eq("id", digest.id);
+    await supabase.from("digests").update({ metadata: { ...progressMeta } }).eq("id", digestId);
   }
 
   try {
@@ -102,7 +131,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
           published_at: r.published_at ?? undefined,
         }));
 
-        // Report cached sources
         const bySrc = new Map<string, number>();
         for (const a of allRaw) bySrc.set(a.source_name, (bySrc.get(a.source_name) || 0) + 1);
         for (const [name, count] of bySrc) {
@@ -115,11 +143,9 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     if (allRaw.length === 0) {
       await updateProgress(15, "Buscando fontes ao vivo...");
 
-      // Fetch each source type separately for per-source error tracking
       const rssSources = sources.filter((s) => s.source_type !== "web");
       const webSources = sources.filter((s) => s.source_type === "web");
 
-      // RSS sources — individual tracking
       const rssResults = await Promise.allSettled(
         rssSources.map(async (s) => {
           const { fetchRssFeed } = await import("@/lib/sources/rss");
@@ -145,17 +171,14 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
       await updateProgress(35, "Buscando fontes web...", { source_results: sourceResults });
 
-      // Web sources — individual tracking
       const webResults = await Promise.allSettled(
         webSources.map(async (s) => {
           const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
           const { deepFetchSource } = await import("@/lib/sources/deep-fetch");
 
-          // Stage 1: deep fetch
           const deep = await deepFetchSource(domain, s.name);
           if (deep.length > 0) return { source: s, articles: deep, method: "deep-fetch" };
 
-          // Stage 2: Tavily Advanced
           const linkedTopic = topics.find((t) => t.id === s.topic_id);
           const keywords = linkedTopic ? linkedTopic.keywords.slice(0, 3).join(" ") : s.name;
           const lang = settings.language === "pt-BR" ? "noticias" : "news";
@@ -164,7 +187,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
           const tavily = await search([{ query: `${keywords} ${lang}`, maxResults, includeDomains: [domain], searchDepth: "advanced" }]);
           if (tavily.length > 0) return { source: s, articles: tavily, method: "tavily" };
 
-          // Stage 3: scraper
           const { scrapeWebSource } = await import("@/lib/sources/scraper");
           const scraped = await scrapeWebSource(domain, s.name);
           return { source: s, articles: scraped, method: "scraper" };
@@ -186,7 +208,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
       await updateProgress(50, "Buscando topicos...", { source_results: sourceResults });
 
-      // Topic and alert searches
       const topicQueries = topics.flatMap((t) => {
         const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
         const topKeywords = t.keywords.slice(0, 3).join(" ");
@@ -207,7 +228,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       }
 
       allRaw = [...webArticles, ...topicArticles, ...rssArticles];
-
     }
 
     await updateProgress(50, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
@@ -219,15 +239,15 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
         status: "completed",
         summary: "Nenhuma noticia encontrada para hoje.",
         metadata: { progress: 100, stage: "Concluido", source_results: sourceResults, total_articles: 0 },
-      }).eq("id", digest.id);
-      return digest.id;
+      }).eq("id", digestId);
+      return;
     }
 
     await updateProgress(55, `Extraindo materia completa de ${filtered.length} artigos...`, { source_results: sourceResults });
 
     const enriched = await enrichArticles(filtered);
 
-    // Store enriched (raw) articles in cache before cleaning — this preserves original content as backup
+    // Store raw content in cache BEFORE cleaning — preserves original as backup
     if (enriched.length > 0 && digestConfigId) {
       const rows = enriched.map((a) => ({
         digest_config_id: digestConfigId,
@@ -247,7 +267,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
     await updateProgress(63, `Removendo publicidade de ${enriched.length} artigos...`, { source_results: sourceResults });
 
-    // Clean ad/promotional content from articles using AI (original preserved in fetched_articles cache)
     const cleaned = await cleanArticlesContent(enriched);
 
     await updateProgress(70, `Analisando ${cleaned.length} artigos com IA...`, { source_results: sourceResults });
@@ -257,7 +276,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 
     const articleRows = processed.map((a) => ({
-      digest_id: digest.id,
+      digest_id: digestId,
       topic_id: a.topic_id,
       alert_id: a.alert_id,
       title: a.title,
@@ -276,7 +295,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
     await updateProgress(85, "Gerando resumo do dia...", { source_results: sourceResults });
 
     const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
-    const trends = await computeTrends(digestConfigId ?? "", digest.id, supabase);
+    const trends = await computeTrends(digestConfigId ?? "", digestId, supabase);
 
     const metadata: DigestMetadata = {
       total_articles: processed.length,
@@ -290,14 +309,21 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       status: "completed",
       summary: daySummary,
       metadata: { ...metadata, progress: 100, stage: "Concluido" },
-    }).eq("id", digest.id);
-
-    return digest.id;
+    }).eq("id", digestId);
   } catch (error) {
     await supabase.from("digests").update({
       status: "failed",
       metadata: { error: String(error), progress: 100, stage: `Erro: ${String(error).slice(0, 100)}` },
-    }).eq("id", digest.id);
+    }).eq("id", digestId);
     throw error;
   }
+}
+
+/**
+ * Combined helper for cron/scheduled use — creates record + runs pipeline synchronously.
+ */
+export async function generateDigest(userId: string, type: "scheduled" | "on_demand", digestConfigId?: string): Promise<string> {
+  const { digestId, settings, topics, sources, alerts, exclusions } = await initializeDigest(userId, type, digestConfigId);
+  await runDigestPipeline(digestId, userId, digestConfigId, settings, topics, sources, alerts, exclusions);
+  return digestId;
 }

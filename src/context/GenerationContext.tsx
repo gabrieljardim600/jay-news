@@ -47,8 +47,8 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       try {
         if (next.status === "idle") {
           localStorage.removeItem(STORAGE_KEY);
-        } else {
-          // Only persist the minimal state needed to resume polling
+        } else if (next.digestId) {
+          // Only persist once we have a real digestId — needed for restoration on refresh
           localStorage.setItem(
             STORAGE_KEY,
             JSON.stringify({ digestId: next.digestId, configId: next.configId, status: next.status })

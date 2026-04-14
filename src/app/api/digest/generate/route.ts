@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { generateDigest } from "@/lib/digest/generator";
+import { after } from "next/server";
+import { initializeDigest, runDigestPipeline, generateDigest } from "@/lib/digest/generator";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -7,7 +8,7 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
 
-  // Cron path: generate for all configs scheduled for the current hour
+  // Cron path: generate for all configs scheduled for the current hour (synchronous)
   if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
     const { createClient: createServiceClient } = await import("@supabase/supabase-js");
     const supabase = createServiceClient(
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ results });
   }
 
-  // User-triggered path
+  // User-triggered path: create record and return digestId immediately, run pipeline in background
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -52,9 +53,20 @@ export async function POST(request: Request) {
   const digestConfigId = body.digestConfigId as string | undefined;
 
   try {
-    const digestId = await generateDigest(user.id, "on_demand", digestConfigId);
+    // Initialize: loads config + creates DB record. Returns immediately with digestId.
+    const { digestId, settings, topics, sources, alerts, exclusions } = await initializeDigest(
+      user.id,
+      "on_demand",
+      digestConfigId
+    );
+
+    // Run the heavy pipeline AFTER the response is sent, keeping the function alive.
+    after(() =>
+      runDigestPipeline(digestId, user.id, digestConfigId, settings, topics, sources, alerts, exclusions)
+    );
+
     return NextResponse.json({ digestId, status: "processing" });
   } catch (error) {
-    return NextResponse.json({ error: `Generation failed: ${error}` }, { status: 500 });
+    return NextResponse.json({ error: `Initialization failed: ${error}` }, { status: 500 });
   }
 }
