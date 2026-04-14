@@ -6,7 +6,14 @@ import { processArticles, generateDaySummary } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
-type Settings = { language: string; summary_style: string; max_articles: number };
+type Settings = {
+  language: string;
+  summary_style: string;
+  max_articles: number;
+  digest_type?: string;
+  trend_topic?: string | null;
+  trend_keywords?: string[] | null;
+};
 
 function getServiceClient() {
   return createClient(
@@ -31,7 +38,7 @@ export async function initializeDigest(
   if (digestConfigId) {
     const { data: config } = await supabase
       .from("digest_configs")
-      .select("language, summary_style, max_articles")
+      .select("language, summary_style, max_articles, digest_type, trend_topic, trend_keywords")
       .eq("id", digestConfigId)
       .single();
     if (!config) throw new Error(`Digest config not found: ${digestConfigId}`);
@@ -108,6 +115,100 @@ export async function runDigestPipeline(
     const sourceResults: { name: string; type: string; status: "ok" | "error" | "empty"; count: number; error?: string }[] = [];
 
     await updateProgress(10, "Buscando artigos...");
+
+    // ── Trends mode: deep multi-angle search for one topic ──────────
+    if (settings.digest_type === "trends" && settings.trend_topic) {
+      const topic = settings.trend_topic;
+      const extra = settings.trend_keywords?.join(", ") ?? "";
+      const lang = settings.language === "pt-BR" ? "PT" : "EN";
+      const { searchAllTopics } = await import("@/lib/sources/search");
+
+      const searchAngles = [
+        { query: `${topic} ${extra} últimas notícias`.trim(), maxResults: 8, searchDepth: "advanced" as const },
+        { query: `${topic} análise tendências 2024 2025`, maxResults: 6, searchDepth: "advanced" as const },
+        { query: `${topic} impacto novidades lançamentos`, maxResults: 6, searchDepth: "advanced" as const },
+        { query: `${topic} perspectivas especialistas`, maxResults: 5, searchDepth: "advanced" as const },
+        { query: `${topic} dados estatísticas relatório`, maxResults: 5, searchDepth: "basic" as const },
+      ];
+
+      // Add English angles for broader coverage
+      if (lang === "PT") {
+        searchAngles.push({ query: `${topic} news latest ${extra}`.trim(), maxResults: 6, searchDepth: "advanced" as const });
+      }
+
+      await updateProgress(20, `Buscando cobertura ampla sobre "${topic}"...`);
+      allRaw = await searchAllTopics(searchAngles);
+
+      if (allRaw.length > 0) {
+        sourceResults.push({ name: `Trends: ${topic}`, type: "search", status: "ok", count: allRaw.length });
+      }
+
+      await updateProgress(45, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
+
+      const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
+
+      if (filtered.length === 0) {
+        await supabase.from("digests").update({
+          status: "completed",
+          summary: `Nenhuma cobertura encontrada para o tema "${topic}".`,
+          metadata: { progress: 100, stage: "Concluido", source_results: sourceResults, total_articles: 0 },
+        }).eq("id", digestId);
+        return;
+      }
+
+      await updateProgress(55, `Extraindo matéria completa de ${filtered.length} artigos...`, { source_results: sourceResults });
+      const enriched = await enrichArticles(filtered);
+
+      if (enriched.length > 0 && digestConfigId) {
+        const rows = enriched.map((a) => ({
+          digest_config_id: digestConfigId,
+          url: a.url, title: a.title, content: a.content || null,
+          full_content: a.full_content || null, source_name: a.source_name,
+          image_url: a.image_url || null, published_at: a.published_at || null,
+          fetched_at: new Date().toISOString(),
+        }));
+        await supabase.from("fetched_articles").upsert(rows, { onConflict: "digest_config_id,url" });
+      }
+
+      await updateProgress(63, `Removendo publicidade de ${enriched.length} artigos...`, { source_results: sourceResults });
+      const cleaned = await cleanArticlesContent(enriched);
+
+      // For trends, create a single "trends" topic for classification
+      const trendsTopics: Topic[] = [{
+        id: "trends", user_id: userId, digest_config_id: digestConfigId ?? "",
+        name: topic, keywords: settings.trend_keywords ?? [topic],
+        priority: "high", is_active: true, created_at: new Date().toISOString(),
+      }];
+
+      await updateProgress(70, `Analisando ${cleaned.length} artigos com IA...`, { source_results: sourceResults });
+      const processed = await processArticles(cleaned, trendsTopics, settings.language, settings.summary_style, sources);
+
+      await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
+      const articleRows = processed.map((a) => ({
+        digest_id: digestId, topic_id: a.topic_id, alert_id: a.alert_id,
+        title: a.title, source_name: a.source_name, source_url: a.source_url,
+        summary: a.summary, full_content: a.full_content,
+        relevance_score: a.relevance_score, is_highlight: a.is_highlight,
+        image_url: a.image_url, published_at: a.published_at,
+      }));
+      await supabase.from("articles").insert(articleRows);
+
+      await updateProgress(88, "Gerando resumo do dia...", { source_results: sourceResults });
+      const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+
+      const metadata: DigestMetadata = {
+        total_articles: processed.length,
+        sources_count: new Set(processed.map((a) => a.source_name)).size,
+        topics_count: 1,
+        source_results: sourceResults,
+      };
+      await supabase.from("digests").update({
+        status: "completed", summary: daySummary,
+        metadata: { ...metadata, progress: 100, stage: "Concluido" },
+      }).eq("id", digestId);
+      return;
+    }
+    // ── End trends mode ──────────────────────────────────────────────
 
     // Try pre-fetched articles first (last 7 days)
     if (digestConfigId) {

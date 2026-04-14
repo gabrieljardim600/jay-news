@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("digests")
-    .select("id, generated_at, type, status, summary, digest_config_id")
+    .select("id, generated_at, type, status, summary, digest_config_id, metadata")
     .eq("user_id", user.id)
     .order("generated_at", { ascending: false })
     .range(offset, offset + limit - 1);

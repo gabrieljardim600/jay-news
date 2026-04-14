@@ -106,14 +106,12 @@ export default function FeedPage() {
         </div>
         <div className="flex gap-1 items-center">
           <ThemeToggle />
-          {activeConfigId && (
-            <button
-              onClick={() => router.push(`/settings?configId=${activeConfigId}`)}
-              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
-            >
-              <Settings className="w-[18px] h-[18px]" />
-            </button>
-          )}
+          <button
+            onClick={() => router.push("/manage")}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
+          >
+            <Settings className="w-[18px] h-[18px]" />
+          </button>
           <button
             onClick={handleGenerate}
             disabled={isGenerating}

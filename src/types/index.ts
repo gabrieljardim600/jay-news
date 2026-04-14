@@ -19,6 +19,9 @@ export interface DigestConfig {
   digest_time: string;
   max_articles: number;
   is_active: boolean;
+  digest_type: "standard" | "trends";
+  trend_topic: string | null;
+  trend_keywords: string[] | null;
   created_at: string;
   updated_at: string;
 }
