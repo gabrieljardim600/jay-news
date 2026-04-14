@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { filterArticles } from "@/lib/digest/filter";
+import { enrichArticles } from "@/lib/sources/enrich";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
@@ -206,26 +207,9 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
       allRaw = [...webArticles, ...topicArticles, ...rssArticles];
 
-      // Store for future use
-      if (allRaw.length > 0 && digestConfigId) {
-        const rows = allRaw.map((a) => ({
-          digest_config_id: digestConfigId,
-          url: a.url,
-          title: a.title,
-          content: a.content || null,
-          full_content: a.full_content || null,
-          source_name: a.source_name,
-          image_url: a.image_url || null,
-          published_at: a.published_at || null,
-          fetched_at: new Date().toISOString(),
-        }));
-        await supabase
-          .from("fetched_articles")
-          .upsert(rows, { onConflict: "digest_config_id,url" });
-      }
     }
 
-    await updateProgress(55, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
+    await updateProgress(50, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
 
     const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
@@ -238,9 +222,31 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       return digest.id;
     }
 
-    await updateProgress(60, `Processando ${filtered.length} artigos com IA...`, { source_results: sourceResults });
+    await updateProgress(55, `Buscando conteudo completo de ${filtered.length} artigos...`, { source_results: sourceResults });
 
-    const processed = await processArticles(filtered, topics, settings.language, settings.summary_style, sources);
+    const enriched = await enrichArticles(filtered);
+
+    // Store enriched articles for future cache use
+    if (enriched.length > 0 && digestConfigId) {
+      const rows = enriched.map((a) => ({
+        digest_config_id: digestConfigId,
+        url: a.url,
+        title: a.title,
+        content: a.content || null,
+        full_content: a.full_content || null,
+        source_name: a.source_name,
+        image_url: a.image_url || null,
+        published_at: a.published_at || null,
+        fetched_at: new Date().toISOString(),
+      }));
+      await supabase
+        .from("fetched_articles")
+        .upsert(rows, { onConflict: "digest_config_id,url" });
+    }
+
+    await updateProgress(70, `Processando ${enriched.length} artigos com IA...`, { source_results: sourceResults });
+
+    const processed = await processArticles(enriched, topics, settings.language, settings.summary_style, sources);
 
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 
