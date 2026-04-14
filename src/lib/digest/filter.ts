@@ -1,6 +1,20 @@
 import type { RawArticle, Exclusion } from "@/types";
 
 /**
+ * Quick heuristic: does this article look like it's in Portuguese?
+ * Used to deprioritize English articles in pt-BR digests.
+ */
+const PT_MARKERS = /\b(que|não|para|com|uma|uns|são|está|foi|pelo|pela|como|mas|mais|também|ainda|sobre|porque|quando|desde|entre|segundo|através|antes|depois|durante|após)\b/gi;
+const EN_MARKERS = /\b(the|of|and|is|was|were|are|have|has|with|from|that|this|which|what|when|where|about|after|before|between)\b/gi;
+
+export function looksPortuguese(text: string): boolean {
+  const sample = text.slice(0, 600).toLowerCase();
+  const pt = (sample.match(PT_MARKERS) || []).length;
+  const en = (sample.match(EN_MARKERS) || []).length;
+  return pt >= en;
+}
+
+/**
  * Keep only articles where the topic or any keyword appears in title or content.
  * Used for trends mode to drop off-topic results Tavily returns on generic queries.
  * Proper nouns (capitalized multi-word) are matched case-insensitively and whole-word.

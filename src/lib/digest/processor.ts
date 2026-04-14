@@ -199,7 +199,7 @@ export async function generateDaySummary(summaries: string[], language: string):
 }
 
 // Top Brazilian news outlets — used as domain filter for pt-BR trends to avoid global noise
-const BR_NEWS_DOMAINS = [
+export const BR_NEWS_DOMAINS = [
   "valor.globo.com", "folha.uol.com.br", "oglobo.globo.com", "estadao.com.br",
   "g1.globo.com", "poder360.com.br", "uol.com.br", "cnnbrasil.com.br",
   "infomoney.com.br", "bloomberglinea.com.br", "brazilJournal.com", "brazil-journal.com",

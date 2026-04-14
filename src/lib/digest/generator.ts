@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { filterArticles, filterByTopicRelevance } from "@/lib/digest/filter";
+import { filterArticles, filterByTopicRelevance, looksPortuguese } from "@/lib/digest/filter";
 import { enrichArticles } from "@/lib/sources/enrich";
 import { cleanArticlesContent } from "@/lib/sources/content-cleaner";
-import { processArticles, generateDaySummary, generateTrendsSearchAngles, generateTrendsBriefing } from "@/lib/digest/processor";
+import { processArticles, generateDaySummary, generateTrendsSearchAngles, generateTrendsBriefing, BR_NEWS_DOMAINS } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
@@ -244,8 +244,8 @@ export async function runDigestPipeline(
         article.alert_id = matchArticleToAlerts(article, alerts);
       }
 
-      // Drop zero-relevance articles
-      const trendsPublishable = processed.filter((a) => a.relevance_score > 0);
+      // Quality threshold for trends (slightly lower bar since we've already filtered by topic)
+      const trendsPublishable = processed.filter((a) => a.relevance_score >= 0.25);
 
       await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
       const trendsTopicIds = new Set(trendsTopics.map((t) => t.id));
@@ -377,15 +377,28 @@ export async function runDigestPipeline(
 
       await updateProgress(50, "Buscando topicos...", { source_results: sourceResults });
 
-      const topicQueries = topics.flatMap((t) => {
+      const isPt = settings.language === "pt-BR";
+      type SearchQ = { query: string; maxResults?: number; includeDomains?: string[]; searchDepth?: "basic" | "advanced"; days?: number };
+      // For each topic, run TWO queries for pt-BR: one Brazilian-domain-focused,
+      // one global. Ensures BR coverage without missing international stories.
+      const topicQueries: SearchQ[] = topics.flatMap((t): SearchQ[] => {
         const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
         const topKeywords = t.keywords.slice(0, 3).join(" ");
-        const lang = settings.language === "pt-BR" ? "Brasil noticias" : "news";
-        return [{ query: `${topKeywords} ${lang}`, maxResults }];
+        if (isPt) {
+          return [
+            { query: `${topKeywords} Brasil`, maxResults, includeDomains: BR_NEWS_DOMAINS, searchDepth: "advanced" },
+            { query: `${topKeywords} noticias`, maxResults: Math.max(2, Math.floor(maxResults / 2)) },
+          ];
+        }
+        return [{ query: `${topKeywords} news`, maxResults }];
       });
-      const alertQueries = alerts
+      const alertQueries: SearchQ[] = alerts
         .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
-        .map((a) => ({ query: a.query, maxResults: 5 }));
+        .map((a): SearchQ => ({
+          query: a.query,
+          maxResults: 5,
+          ...(isPt ? { includeDomains: BR_NEWS_DOMAINS } : {}),
+        }));
 
       const { searchAllTopics } = await import("@/lib/sources/search");
       const topicArticles = await searchAllTopics(topicQueries.concat(alertQueries));
@@ -468,8 +481,22 @@ export async function runDigestPipeline(
       article.alert_id = matchArticleToAlerts(article, alerts);
     }
 
-    // Drop articles with zero relevance — these are empty/cookie-only pages that slipped through
-    const publishable = processed.filter((a) => a.relevance_score > 0);
+    // Language penalty: in pt-BR digests, English articles drop 30% in score
+    // (keeps them discoverable for truly important stories but prefers PT coverage)
+    if (settings.language === "pt-BR") {
+      for (const article of processed) {
+        const text = `${article.title} ${article.summary}`;
+        if (!looksPortuguese(text)) {
+          article.relevance_score = article.relevance_score * 0.7;
+        }
+      }
+      processed.sort((a, b) => b.relevance_score - a.relevance_score);
+    }
+
+    // Quality threshold: drop anything below 0.3 (empty pages, soft news, noise)
+    const MIN_RELEVANCE = 0.3;
+    const publishable = processed.filter((a) => a.relevance_score >= MIN_RELEVANCE);
+    console.log(`Quality threshold: ${processed.length} → ${publishable.length} (dropped ${processed.length - publishable.length} below ${MIN_RELEVANCE})`);
 
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 

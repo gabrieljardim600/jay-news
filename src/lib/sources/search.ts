@@ -16,7 +16,8 @@ export async function searchTavily(
   query: string,
   maxResults: number = 5,
   includeDomains?: string[],
-  searchDepth: "basic" | "advanced" = "basic"
+  searchDepth: "basic" | "advanced" = "basic",
+  days: number = 7
 ): Promise<RawArticle[]> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
@@ -31,6 +32,7 @@ export async function searchTavily(
       search_depth: searchDepth,
       include_answer: false,
       topic: "news",
+      days,
     };
     if (includeDomains && includeDomains.length > 0) {
       body.include_domains = includeDomains;
@@ -67,10 +69,10 @@ export async function searchTavily(
 }
 
 export async function searchAllTopics(
-  queries: { query: string; maxResults?: number; includeDomains?: string[]; searchDepth?: "basic" | "advanced" }[]
+  queries: { query: string; maxResults?: number; includeDomains?: string[]; searchDepth?: "basic" | "advanced"; days?: number }[]
 ): Promise<RawArticle[]> {
   const results = await Promise.allSettled(
-    queries.map((q) => searchTavily(q.query, q.maxResults || 5, q.includeDomains, q.searchDepth || "basic"))
+    queries.map((q) => searchTavily(q.query, q.maxResults || 5, q.includeDomains, q.searchDepth || "basic", q.days ?? 7))
   );
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
