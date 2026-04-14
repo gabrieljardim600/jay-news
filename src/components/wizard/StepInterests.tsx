@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Sparkles, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { ChipInput } from "@/components/ui/ChipInput";
 
@@ -28,6 +30,35 @@ export function StepInterests({
   name, icon, color, interests,
   onNameChange, onIconChange, onColorChange, onInterestsChange,
 }: StepInterestsProps) {
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  async function handleSuggest() {
+    if (!name.trim() || suggesting) return;
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/suggest-topics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const data = await res.json();
+      const topics: string[] = Array.isArray(data.topics) ? data.topics : [];
+      // Filter out ones already added
+      const fresh = topics.filter((t) => !interests.some((i) => i.toLowerCase() === t.toLowerCase()));
+      setSuggestions(fresh);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function addSuggestion(topic: string) {
+    if (!interests.some((i) => i.toLowerCase() === topic.toLowerCase())) {
+      onInterestsChange([...interests, topic]);
+    }
+    setSuggestions((prev) => prev.filter((s) => s !== topic));
+  }
+
   return (
     <div className="flex flex-col gap-8 max-w-xl mx-auto">
       <div>
@@ -88,7 +119,18 @@ export function StepInterests({
       </div>
 
       <div>
-        <h2 className="text-[22px] font-bold mb-1 tracking-tight">Interesses</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-[22px] font-bold tracking-tight">Interesses</h2>
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={!name.trim() || suggesting}
+            className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:text-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {suggesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Sugerir com IA
+          </button>
+        </div>
         <p className="text-text-secondary text-[14px] mb-4">
           Cada interesse vira uma categoria. Adicione pelo menos um.
         </p>
@@ -97,6 +139,26 @@ export function StepInterests({
           onChange={onInterestsChange}
           placeholder="empreendedorismo, IA, day trade..."
         />
+
+        {suggestions.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+              Sugestões baseadas em &quot;{name}&quot;
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestions.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => addSuggestion(t)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] bg-surface hover:bg-primary hover:text-white transition-colors border border-border"
+                >
+                  + {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

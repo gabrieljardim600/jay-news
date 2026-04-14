@@ -45,6 +45,9 @@ export async function enrichArticles(articles: RawArticle[]): Promise<RawArticle
 }
 
 async function fetchArticlePage(url: string): Promise<{ content: string | null; imageUrl: string | null } | null> {
+  let content: string | null = null;
+  let imageUrl: string | null = null;
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), JINA_TIMEOUT);
@@ -59,22 +62,120 @@ async function fetchArticlePage(url: string): Promise<{ content: string | null; 
     });
     clearTimeout(timer);
 
-    if (!response.ok) return null;
-    const markdown = await response.text();
-    if (markdown.length < 100) return null;
-
-    const content = extractArticleBody(markdown);
-    let imageUrl = extractMainImage(markdown);
-
-    // Fallback: if Jina didn't surface a good image, try og:image from the raw HTML
-    if (!imageUrl) {
-      imageUrl = await fetchOgImage(url);
+    if (response.ok) {
+      const markdown = await response.text();
+      if (markdown.length >= 100) {
+        content = extractArticleBody(markdown);
+        imageUrl = extractMainImage(markdown);
+      }
     }
+  } catch {
+    // Jina failed, will fallback
+  }
+
+  // Fallback 1: if Jina gave no/short content, try direct HTML fetch + readability-ish extraction
+  if (!content || content.length < MIN_CONTENT_LENGTH) {
+    const direct = await fetchDirectHtml(url);
+    if (direct) {
+      if (direct.content && direct.content.length > (content?.length || 0)) {
+        content = direct.content;
+      }
+      if (!imageUrl && direct.imageUrl) imageUrl = direct.imageUrl;
+    }
+  }
+
+  // Fallback 2: og:image if we still don't have an image
+  if (!imageUrl) {
+    imageUrl = await fetchOgImage(url);
+  }
+
+  return { content, imageUrl };
+}
+
+/**
+ * Direct HTML fetch + simple readability-style extraction.
+ * Fallback for when Jina Reader fails or returns insufficient content.
+ */
+async function fetchDirectHtml(url: string): Promise<{ content: string | null; imageUrl: string | null } | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; JNewsBot/1.0; +https://jnews.vercel.app)",
+        Accept: "text/html",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    if (html.length < 500) return null;
+
+    const content = extractFromHtml(html);
+    const imgMatch = html.match(/<meta\s+(?:property|name)=["'](?:og:image|twitter:image)(?::src)?["']\s+content=["']([^"']+)["']/i)
+      || html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["'](?:og:image|twitter:image)/i);
+    const imageUrl = imgMatch ? imgMatch[1] : null;
 
     return { content, imageUrl };
   } catch {
     return null;
   }
+}
+
+/**
+ * Extract readable body from raw HTML. Prefers <article>, <main>, or the longest
+ * content block. Strips scripts, styles, nav, aside, footer, forms, iframes.
+ */
+function extractFromHtml(html: string): string | null {
+  // Strip unwanted tags (including their content)
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<form[\s\S]*?<\/form>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+
+  // Try to isolate the main article region
+  const articleMatch = clean.match(/<article[\s\S]*?<\/article>/i);
+  const mainMatch = clean.match(/<main[\s\S]*?<\/main>/i);
+  const region = articleMatch?.[0] || mainMatch?.[0] || clean;
+
+  // Extract text from paragraph-like tags
+  const blocks: string[] = [];
+  const tagRe = /<(p|h[1-6]|li|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let m;
+  while ((m = tagRe.exec(region)) !== null) {
+    const text = m[2]
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text.length >= 40) blocks.push(text);
+  }
+
+  if (blocks.length === 0) return null;
+
+  const content = blocks.join("\n\n").trim();
+  if (content.length < MIN_CONTENT_LENGTH) return null;
+
+  // Cap at 5000 chars at a sentence boundary
+  if (content.length > 5000) {
+    const cut = content.lastIndexOf(". ", 5000);
+    return content.slice(0, cut > 4000 ? cut + 1 : 5000) + "…";
+  }
+  return content;
 }
 
 /**

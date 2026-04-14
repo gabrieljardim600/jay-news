@@ -157,7 +157,7 @@ export async function processArticles(
     }
   }
 
-  // Apply source weight boost, then re-sort
+  // Apply source weight boost
   if (sources && sources.length > 0) {
     const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
     for (const article of processed) {
@@ -166,6 +166,20 @@ export async function processArticles(
         article.relevance_score = Math.min(1.0, article.relevance_score * (1 + (source.weight - 3) * 0.1));
       }
     }
+  }
+
+  // Temporal decay: fresher news ranks higher
+  // 0–1 days: 1.0, 2 days: 0.95, 3 days: 0.88, 4–6 days: 0.80, 7+ days: 0.70
+  const now = Date.now();
+  for (const article of processed) {
+    if (!article.published_at) continue;
+    const ageDays = (now - new Date(article.published_at).getTime()) / 86_400_000;
+    let mult = 1.0;
+    if (ageDays > 7) mult = 0.70;
+    else if (ageDays > 3) mult = 0.80;
+    else if (ageDays > 2) mult = 0.88;
+    else if (ageDays > 1) mult = 0.95;
+    article.relevance_score = article.relevance_score * mult;
   }
 
   processed.sort((a, b) => b.relevance_score - a.relevance_score);

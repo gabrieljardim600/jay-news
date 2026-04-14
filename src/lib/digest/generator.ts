@@ -3,6 +3,7 @@ import { filterArticles, filterByTopicRelevance, looksPortuguese } from "@/lib/d
 import { enrichArticles } from "@/lib/sources/enrich";
 import { cleanArticlesContent } from "@/lib/sources/content-cleaner";
 import { processArticles, generateDaySummary, generateTrendsSearchAngles, generateTrendsBriefing, BR_NEWS_DOMAINS } from "@/lib/digest/processor";
+import { semanticDedup } from "@/lib/digest/semantic-dedup";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
@@ -245,7 +246,8 @@ export async function runDigestPipeline(
       }
 
       // Quality threshold for trends (slightly lower bar since we've already filtered by topic)
-      const trendsPublishable = processed.filter((a) => a.relevance_score >= 0.25);
+      const trendsThreshold = processed.filter((a) => a.relevance_score >= 0.25);
+      const trendsPublishable = await semanticDedup(trendsThreshold);
 
       await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
       const trendsTopicIds = new Set(trendsTopics.map((t) => t.id));
@@ -495,8 +497,11 @@ export async function runDigestPipeline(
 
     // Quality threshold: drop anything below 0.3 (empty pages, soft news, noise)
     const MIN_RELEVANCE = 0.3;
-    const publishable = processed.filter((a) => a.relevance_score >= MIN_RELEVANCE);
-    console.log(`Quality threshold: ${processed.length} → ${publishable.length} (dropped ${processed.length - publishable.length} below ${MIN_RELEVANCE})`);
+    const threshold = processed.filter((a) => a.relevance_score >= MIN_RELEVANCE);
+    console.log(`Quality threshold: ${processed.length} → ${threshold.length} (dropped ${processed.length - threshold.length} below ${MIN_RELEVANCE})`);
+
+    // Semantic dedup: collapse near-duplicate stories from different sources
+    const publishable = await semanticDedup(threshold);
 
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 

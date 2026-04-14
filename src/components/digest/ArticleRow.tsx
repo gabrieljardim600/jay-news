@@ -10,13 +10,26 @@ interface ArticleRowProps {
   article: Article;
 }
 
+function faviconFor(url: string): string | null {
+  try {
+    const host = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
+  } catch {
+    return null;
+  }
+}
+
 export function ArticleRow({ article }: ArticleRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
   const viewMode = useViewMode();
   const hasFullContent = !!article.full_content && article.full_content.length > 50;
   const cleanPreview = article.full_content
     ? article.full_content.slice(0, 200).replace(/\n+/g, " ").trim() + (article.full_content.length > 200 ? "…" : "")
     : article.summary;
+
+  const showImage = article.image_url && !imgFailed;
+  const faviconUrl = !showImage ? faviconFor(article.source_url) : null;
 
   return (
     <div className="py-4 border-b border-border last:border-0">
@@ -61,15 +74,25 @@ export function ArticleRow({ article }: ArticleRowProps) {
           </div>
 
           {/* Thumbnail — only when collapsed */}
-          {article.image_url && !expanded && (
-            <div className="w-[72px] h-[72px] rounded-[10px] overflow-hidden bg-surface shrink-0 self-start mt-0.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={article.image_url}
-                alt=""
-                className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
+          {!expanded && (
+            <div className="w-[72px] h-[72px] rounded-[10px] overflow-hidden bg-surface shrink-0 self-start mt-0.5 flex items-center justify-center">
+              {showImage ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={article.image_url!}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={() => setImgFailed(true)}
+                />
+              ) : faviconUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={faviconUrl}
+                  alt=""
+                  className="w-8 h-8 object-contain opacity-70"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : null}
             </div>
           )}
 
