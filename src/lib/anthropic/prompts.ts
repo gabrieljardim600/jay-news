@@ -2,7 +2,10 @@ import type { RawArticle, Topic } from "@/types";
 
 export function buildBatchPrompt(articles: RawArticle[], topics: Topic[], language: string, style: string): string {
   const topicList = topics.map((t) => `- "${t.name}" (id: ${t.id}, priority: ${t.priority}, keywords: ${t.keywords.join(", ")})`).join("\n");
-  const articleList = articles.map((a, i) => `[${i}] Title: ${a.title}\nSource: ${a.source_name}\nURL: ${a.url}\nContent: ${a.content.slice(0, 500)}`).join("\n\n");
+  const articleList = articles.map((a, i) => {
+    const body = (a.full_content || a.content).slice(0, 2000);
+    return `[${i}] Title: ${a.title}\nSource: ${a.source_name}\nURL: ${a.url}\nContent: ${body}`;
+  }).join("\n\n");
   const styleInstruction = style === "executive"
     ? "Write concise 2-3 sentence summaries focused on key facts and implications."
     : "Write detailed 4-5 sentence summaries covering context, details, and analysis.";

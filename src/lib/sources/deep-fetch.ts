@@ -16,7 +16,8 @@ interface EditionLink {
 
 interface StoryItem {
   title: string;
-  summary: string;
+  summary: string;    // Short 2-3 sentence preview
+  full_content: string; // Full story text as written in the newsletter
   url: string | null;
 }
 
@@ -77,14 +78,15 @@ async function extractStoriesFromEdition(
     const client = getAnthropicClient();
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: [{
         role: "user",
         content: `This is the full content of a newsletter edition called "${editionTitle}" from "${sourceName}".
 
-Extract each individual news story covered in this edition. For each story:
+Extract each individual news story covered in this edition. For each story return:
 - "title": the story headline (keep original language)
 - "summary": 2-3 sentence description of what happened (keep original language)
+- "full_content": the COMPLETE original text about this story as written in the newsletter — include all details, context, and quotes (keep original language, do not truncate)
 - "url": the source article URL if mentioned (absolute URL starting with https), otherwise null
 
 Rules:
@@ -110,6 +112,7 @@ ${content.slice(0, 10000)}`,
         title: s.title,
         url: s.url ?? editionUrl,
         content: s.summary ?? "",
+        full_content: s.full_content ?? s.summary ?? "",
         source_name: sourceName,
         published_at: undefined,
       }));

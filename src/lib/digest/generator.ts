@@ -69,7 +69,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: storedRows } = await supabase
         .from("fetched_articles")
-        .select("title, url, content, source_name, image_url, published_at")
+        .select("title, url, content, full_content, source_name, image_url, published_at")
         .eq("digest_config_id", digestConfigId)
         .gte("fetched_at", sevenDaysAgo)
         .order("fetched_at", { ascending: false })
@@ -80,6 +80,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
           title: r.title,
           url: r.url,
           content: r.content || "",
+          full_content: r.full_content ?? undefined,
           source_name: r.source_name,
           image_url: r.image_url ?? undefined,
           published_at: r.published_at ?? undefined,
@@ -98,6 +99,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
           url: a.url,
           title: a.title,
           content: a.content || null,
+          full_content: a.full_content || null,
           source_name: a.source_name,
           image_url: a.image_url || null,
           published_at: a.published_at || null,
@@ -126,6 +128,7 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       source_name: a.source_name,
       source_url: a.source_url,
       summary: a.summary,
+      full_content: a.full_content,
       relevance_score: a.relevance_score,
       is_highlight: a.is_highlight,
       image_url: a.image_url,

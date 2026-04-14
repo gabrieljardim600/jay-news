@@ -101,6 +101,7 @@ export async function fetchAndStore(
     url: a.url,
     title: a.title,
     content: a.content || null,
+    full_content: a.full_content || null,
     source_name: a.source_name,
     image_url: a.image_url || null,
     published_at: a.published_at || null,

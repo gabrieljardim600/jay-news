@@ -9,14 +9,19 @@ const parser = new Parser({
 export async function fetchRssFeed(url: string, sourceName: string): Promise<RawArticle[]> {
   try {
     const feed = await parser.parseURL(url);
-    return (feed.items || []).slice(0, 20).map((item) => ({
-      title: item.title || "Sem titulo",
-      url: item.link || url,
-      content: item.contentSnippet || item.content || "",
-      source_name: sourceName,
-      image_url: item.enclosure?.url || undefined,
-      published_at: item.isoDate || undefined,
-    }));
+    return (feed.items || []).slice(0, 20).map((item) => {
+      const fullText = item.content || item["content:encoded"] || "";
+      const snippet = item.contentSnippet || fullText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+      return {
+        title: item.title || "Sem titulo",
+        url: item.link || url,
+        content: snippet,
+        full_content: fullText || snippet || undefined,
+        source_name: sourceName,
+        image_url: item.enclosure?.url || undefined,
+        published_at: item.isoDate || undefined,
+      };
+    });
   } catch (error) {
     console.error(`RSS fetch failed for ${sourceName} (${url}):`, error);
     return [];

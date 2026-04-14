@@ -59,6 +59,7 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
         source_name: raw.source_name,
         source_url: raw.url,
         summary: result.summary,
+        full_content: raw.full_content || null,
         topic_id: result.topic_id,
         alert_id: null,
         relevance_score: result.relevance_score,

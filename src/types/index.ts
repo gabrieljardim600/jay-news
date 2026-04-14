@@ -97,6 +97,7 @@ export interface Article {
   source_name: string;
   source_url: string;
   summary: string;
+  full_content: string | null;
   relevance_score: number;
   is_highlight: boolean;
   image_url: string | null;
@@ -107,7 +108,8 @@ export interface Article {
 export interface RawArticle {
   title: string;
   url: string;
-  content: string;
+  content: string;       // Short snippet or AI summary — used for display/preview
+  full_content?: string; // Complete original text — used for AI processing
   source_name: string;
   image_url?: string;
   published_at?: string;
@@ -118,6 +120,7 @@ export interface ProcessedArticle {
   source_name: string;
   source_url: string;
   summary: string;
+  full_content: string | null;
   topic_id: string | null;
   alert_id: string | null;
   relevance_score: number;
