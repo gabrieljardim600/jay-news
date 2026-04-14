@@ -200,8 +200,17 @@ export async function runDigestPipeline(
       await updateProgress(55, `Extraindo matéria completa de ${filtered.length} artigos...`, { source_results: sourceResults });
       const enrichedRaw = await enrichArticles(filtered);
 
-      // Content quality gate
-      const enriched = enrichedRaw.filter((a) => (a.full_content || a.content || "").length >= 500);
+      // Content quality gate — more permissive for trends (Tavily snippets can be shorter)
+      const enriched = enrichedRaw.filter((a) => (a.full_content || a.content || "").length >= 250);
+
+      if (enriched.length === 0) {
+        await supabase.from("digests").update({
+          status: "completed",
+          summary: `Nenhuma cobertura com conteúdo suficiente foi encontrada para "${topic}".`,
+          metadata: { progress: 100, stage: "Concluido", source_results: sourceResults, total_articles: 0 },
+        }).eq("id", digestId);
+        return;
+      }
 
       if (enriched.length > 0 && digestConfigId) {
         const rows = enriched.map((a) => ({

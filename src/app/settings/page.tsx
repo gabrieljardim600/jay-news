@@ -10,6 +10,8 @@ import { TopicsList } from "@/components/settings/TopicsList";
 import { SourcesList } from "@/components/settings/SourcesList";
 import { AlertsList } from "@/components/settings/AlertsList";
 import { AdvancedOptions } from "@/components/settings/AdvancedOptions";
+import { TrendsEditor } from "@/components/settings/TrendsEditor";
+import { TrendingUp } from "lucide-react";
 import { useGeneration } from "@/context/GenerationContext";
 import type { Topic, RssSource, Alert, Exclusion, DigestConfig, UserSettings } from "@/types";
 
@@ -166,6 +168,12 @@ function SettingsContent() {
             <span className="text-[14px] text-text-secondary">
               {config.is_active ? "Ativo" : "Inativo"} · {config.digest_time} · {config.max_articles} artigos max
             </span>
+            {config.digest_type === "trends" && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "color-mix(in srgb, var(--color-primary) 15%, transparent)", color: "var(--color-primary)" }}>
+                <TrendingUp className="w-2.5 h-2.5" />
+                TRENDS
+              </span>
+            )}
           </div>
           <span className="text-[12px] text-text-muted">
             {config.language === "pt-BR" ? "PT-BR" : config.language.toUpperCase()} · {config.summary_style === "executive" ? "Executivo" : config.summary_style === "complete" ? "Completo" : "Detalhado"}
@@ -174,9 +182,28 @@ function SettingsContent() {
       )}
 
       <div className="flex flex-col gap-5">
-        <TopicsList topics={topics} onRefresh={handleSaved} configId={configId!} />
-        <SourcesList sources={sources} topics={topics} onRefresh={handleSaved} configId={configId!} />
-        <AlertsList alerts={alerts} onRefresh={handleSaved} configId={configId!} />
+        {config?.digest_type === "trends" ? (
+          <>
+            <TrendsEditor
+              topic={config.trend_topic || ""}
+              keywords={config.trend_keywords || []}
+              onSave={async (topic, keywords) => {
+                await handleSettingsChange({
+                  // @ts-expect-error — trends fields on UserSettings are not typed but API accepts them
+                  trend_topic: topic,
+                  trend_keywords: keywords,
+                });
+              }}
+            />
+            <AlertsList alerts={alerts} onRefresh={handleSaved} configId={configId!} />
+          </>
+        ) : (
+          <>
+            <TopicsList topics={topics} onRefresh={handleSaved} configId={configId!} />
+            <SourcesList sources={sources} topics={topics} onRefresh={handleSaved} configId={configId!} />
+            <AlertsList alerts={alerts} onRefresh={handleSaved} configId={configId!} />
+          </>
+        )}
         <AdvancedOptions
           settings={settingsForAdvanced}
           exclusions={exclusions}

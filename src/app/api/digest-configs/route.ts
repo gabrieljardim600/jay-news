@@ -28,17 +28,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
+  const isTrends = body.digest_type === "trends";
   const { data, error } = await supabase
     .from("digest_configs")
     .insert({
       user_id: user.id,
       name: body.name.trim(),
-      icon: body.icon || "📰",
+      icon: body.icon || (isTrends ? "📈" : "📰"),
       color: body.color || "#fb830e",
       language: body.language || "pt-BR",
       summary_style: body.summary_style || "executive",
       digest_time: body.digest_time || "07:00",
       max_articles: Math.min(50, Math.max(5, body.max_articles || 20)),
+      digest_type: isTrends ? "trends" : "standard",
+      trend_topic: isTrends ? (body.trend_topic || null) : null,
+      trend_keywords: isTrends && Array.isArray(body.trend_keywords) ? body.trend_keywords : null,
     })
     .select()
     .single();

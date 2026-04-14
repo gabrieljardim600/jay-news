@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { relativeDate } from "@/lib/utils/relative-date";
+import { useViewMode } from "@/context/ViewModeContext";
 import type { Article } from "@/types";
 
 interface ArticleRowProps {
@@ -11,7 +12,11 @@ interface ArticleRowProps {
 
 export function ArticleRow({ article }: ArticleRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const viewMode = useViewMode();
   const hasFullContent = !!article.full_content && article.full_content.length > 50;
+  const cleanPreview = article.full_content
+    ? article.full_content.slice(0, 200).replace(/\n+/g, " ").trim() + (article.full_content.length > 200 ? "…" : "")
+    : article.summary;
 
   return (
     <div className="py-4 border-b border-border last:border-0">
@@ -29,7 +34,7 @@ export function ArticleRow({ article }: ArticleRowProps) {
 
             {!expanded && (
               <p className="text-[13px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">
-                {article.summary}
+                {viewMode === "clean" ? cleanPreview : article.summary}
               </p>
             )}
 
@@ -90,11 +95,13 @@ export function ArticleRow({ article }: ArticleRowProps) {
             </div>
           )}
 
-          {/* AI summary box */}
-          <div className="bg-surface rounded-[10px] p-3 mb-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-text-muted mb-1.5">Resumo IA</p>
-            <p className="text-[14px] text-text leading-relaxed">{article.summary}</p>
-          </div>
+          {/* AI summary box — hidden in clean mode */}
+          {viewMode === "summary" && (
+            <div className="bg-surface rounded-[10px] p-3 mb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-text-muted mb-1.5">Resumo IA</p>
+              <p className="text-[14px] text-text leading-relaxed">{article.summary}</p>
+            </div>
+          )}
 
           {/* Full article content */}
           {hasFullContent && (
