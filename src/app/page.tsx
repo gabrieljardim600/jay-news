@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, RefreshCw, Loader2 } from "lucide-react";
+import { Settings, RefreshCw } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
 import { DigestTabs } from "@/components/feed/DigestTabs";
@@ -12,7 +12,8 @@ import { CategorySection } from "@/components/digest/CategorySection";
 import { AlertsSection } from "@/components/digest/AlertsSection";
 import { DigestDateSelector } from "@/components/digest/DigestDateSelector";
 import { TrendingSection } from "@/components/feed/TrendingSection";
-import type { Digest, DigestConfig, DigestWithArticles, Topic, SourceResult } from "@/types";
+import { useGeneration } from "@/context/GenerationContext";
+import type { Digest, DigestConfig, DigestWithArticles, Topic } from "@/types";
 
 export default function FeedPage() {
   const [configs, setConfigs] = useState<DigestConfig[]>([]);
@@ -20,12 +21,11 @@ export default function FeedPage() {
   const [digests, setDigests] = useState<Digest[]>([]);
   const [current, setCurrent] = useState<DigestWithArticles | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [genStatus, setGenStatus] = useState("");
-  const [genProgress, setGenProgress] = useState(0);
-  const [genSourceResults, setGenSourceResults] = useState<SourceResult[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const { genState, startGeneration } = useGeneration();
+  const prevGenStatus = useRef(genState.status);
 
   useEffect(() => {
     async function loadConfigs() {
@@ -64,6 +64,18 @@ export default function FeedPage() {
     if (activeConfigId) loadDigestsForConfig(activeConfigId);
   }, [activeConfigId, loadDigestsForConfig]);
 
+  // Refresh digest list when generation completes
+  useEffect(() => {
+    if (
+      prevGenStatus.current === "generating" &&
+      genState.status === "completed" &&
+      genState.configId
+    ) {
+      loadDigestsForConfig(genState.configId);
+    }
+    prevGenStatus.current = genState.status;
+  }, [genState.status, genState.configId, loadDigestsForConfig]);
+
   function handleSelectConfig(id: string) {
     setActiveConfigId(id);
     setCurrent(null);
@@ -71,68 +83,8 @@ export default function FeedPage() {
   }
 
   async function handleGenerate() {
-    if (!activeConfigId) return;
-    setGenerating(true);
-    setGenStatus("Iniciando...");
-    setGenProgress(5);
-
-    try {
-      const res = await fetch("/api/digest/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ digestConfigId: activeConfigId }),
-      });
-
-      if (!res.ok) {
-        setGenStatus("Erro ao iniciar geracao");
-        setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
-        return;
-      }
-
-      const { digestId } = await res.json();
-      setGenStatus("Buscando artigos...");
-      setGenProgress(10);
-      setGenSourceResults([]);
-
-      let attempts = 0;
-      const maxAttempts = 90;
-      while (attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 2000));
-        attempts++;
-
-        try {
-          const check = await fetch(`/api/digest/${digestId}`);
-          const data = await check.json();
-
-          // Read real progress from metadata
-          if (data.metadata?.progress) setGenProgress(data.metadata.progress);
-          if (data.metadata?.stage) setGenStatus(data.metadata.stage);
-          if (data.metadata?.source_results) setGenSourceResults(data.metadata.source_results);
-
-          if (data.status === "completed") {
-            setGenProgress(100);
-            setGenStatus("Concluido!");
-            await loadDigestsForConfig(activeConfigId);
-            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 1200);
-            return;
-          }
-          if (data.status === "failed") {
-            const errMsg = data.metadata?.error || "Falha na geracao";
-            setGenStatus(`Erro: ${errMsg.slice(0, 80)}`);
-            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 5000);
-            return;
-          }
-        } catch {
-          // Network error during poll, keep trying
-        }
-      }
-
-      setGenStatus("Timeout — tente novamente");
-      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 3000);
-    } catch {
-      setGenStatus("Erro de conexao");
-      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
-    }
+    if (!activeConfigId || genState.status === "generating") return;
+    await startGeneration(activeConfigId);
   }
 
   const getTopicName = (topicId: string) =>
@@ -140,8 +92,10 @@ export default function FeedPage() {
 
   if (loading) return <FeedSkeleton />;
 
+  const isGenerating = genState.status === "generating";
+
   return (
-    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 pb-28">
       {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <div>
@@ -162,56 +116,18 @@ export default function FeedPage() {
           )}
           <button
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={isGenerating}
             className={`ml-1 h-9 px-4 flex items-center gap-2 rounded-full text-[13px] font-medium transition-all duration-200 active:scale-[0.97] ${
-              generating
+              isGenerating
                 ? "bg-surface text-text-muted"
                 : "bg-primary text-white hover:bg-primary-hover shadow-sm"
             }`}
           >
-            {generating ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3.5 h-3.5" />
-            )}
-            {generating ? "Gerando..." : "Gerar digest"}
+            <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin opacity-50" : ""}`} />
+            {isGenerating ? "Gerando..." : "Gerar digest"}
           </button>
         </div>
       </header>
-
-      {/* Generation progress */}
-      {generating && (
-        <div className="mb-6 bg-card glass rounded-[14px] border border-border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-[14px] font-medium text-text">{genStatus}</span>
-            </div>
-            <span className="text-[12px] text-text-muted font-mono">{Math.round(genProgress)}%</span>
-          </div>
-          <div className="w-full h-1.5 bg-surface rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${genProgress}%` }}
-            />
-          </div>
-          {genSourceResults.length > 0 && (
-            <div className="mt-3 flex flex-col gap-1">
-              {genSourceResults.map((sr, i) => (
-                <div key={i} className="flex items-center gap-2 text-[12px]">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    sr.status === "ok" ? "bg-success" : sr.status === "error" ? "bg-danger" : "bg-warning"
-                  }`} />
-                  <span className="text-text-secondary truncate">{sr.name}</span>
-                  <span className="text-text-muted ml-auto shrink-0">
-                    {sr.status === "ok" ? `${sr.count} artigos` : sr.status === "error" ? "Erro" : "Vazio"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Digest tabs */}
       <DigestTabs configs={configs} activeId={activeConfigId} onSelect={handleSelectConfig} />
@@ -224,7 +140,7 @@ export default function FeedPage() {
       />
 
       {/* Empty state */}
-      {!current && digests.length === 0 && !generating && (
+      {!current && digests.length === 0 && !isGenerating && (
         <div className="text-center py-24">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
             <span className="text-2xl">📭</span>

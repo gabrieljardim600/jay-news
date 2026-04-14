@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { filterArticles } from "@/lib/digest/filter";
 import { enrichArticles } from "@/lib/sources/enrich";
+import { cleanArticlesContent } from "@/lib/sources/content-cleaner";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
@@ -222,11 +223,11 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       return digest.id;
     }
 
-    await updateProgress(55, `Buscando conteudo completo de ${filtered.length} artigos...`, { source_results: sourceResults });
+    await updateProgress(55, `Extraindo materia completa de ${filtered.length} artigos...`, { source_results: sourceResults });
 
     const enriched = await enrichArticles(filtered);
 
-    // Store enriched articles for future cache use
+    // Store enriched (raw) articles in cache before cleaning — this preserves original content as backup
     if (enriched.length > 0 && digestConfigId) {
       const rows = enriched.map((a) => ({
         digest_config_id: digestConfigId,
@@ -244,9 +245,14 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
         .upsert(rows, { onConflict: "digest_config_id,url" });
     }
 
-    await updateProgress(70, `Processando ${enriched.length} artigos com IA...`, { source_results: sourceResults });
+    await updateProgress(63, `Removendo publicidade de ${enriched.length} artigos...`, { source_results: sourceResults });
 
-    const processed = await processArticles(enriched, topics, settings.language, settings.summary_style, sources);
+    // Clean ad/promotional content from articles using AI (original preserved in fetched_articles cache)
+    const cleaned = await cleanArticlesContent(enriched);
+
+    await updateProgress(70, `Analisando ${cleaned.length} artigos com IA...`, { source_results: sourceResults });
+
+    const processed = await processArticles(cleaned, topics, settings.language, settings.summary_style, sources);
 
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Play, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +10,7 @@ import { TopicsList } from "@/components/settings/TopicsList";
 import { SourcesList } from "@/components/settings/SourcesList";
 import { AlertsList } from "@/components/settings/AlertsList";
 import { AdvancedOptions } from "@/components/settings/AdvancedOptions";
+import { useGeneration } from "@/context/GenerationContext";
 import type { Topic, RssSource, Alert, Exclusion, DigestConfig, UserSettings } from "@/types";
 
 function SettingsContent() {
@@ -20,10 +21,13 @@ function SettingsContent() {
   const [exclusions, setExclusions] = useState<Exclusion[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const configId = searchParams.get("configId");
+
+  const { genState, startGeneration } = useGeneration();
+  const isGenerating = genState.status === "generating";
 
   const loadData = useCallback(async () => {
     if (!configId) return;
@@ -50,6 +54,16 @@ function SettingsContent() {
     loadData();
   }, [configId, loadData, router]);
 
+  function showSavedToast() {
+    setSavedToast(true);
+    setTimeout(() => setSavedToast(false), 2500);
+  }
+
+  function handleSaved() {
+    loadData();
+    showSavedToast();
+  }
+
   async function handleSettingsChange(updates: Partial<UserSettings>) {
     if (!config) return;
     setConfig((prev) => prev ? { ...prev, ...updates } : prev);
@@ -58,6 +72,7 @@ function SettingsContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: config.id, ...updates }),
     });
+    showSavedToast();
   }
 
   async function handleAddExclusion(keyword: string) {
@@ -67,6 +82,7 @@ function SettingsContent() {
       body: JSON.stringify({ keyword, digest_config_id: configId }),
     });
     loadData();
+    showSavedToast();
   }
 
   async function handleRemoveExclusion(id: string) {
@@ -80,27 +96,9 @@ function SettingsContent() {
   }
 
   async function handleRunDigest() {
-    if (!configId) return;
-    setGenerating(true);
-    try {
-      const res = await fetch("/api/digest/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ digestConfigId: configId }),
-      });
-      const { digestId } = await res.json();
-      let attempts = 0;
-      while (attempts < 90) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const check = await fetch(`/api/digest/${digestId}`);
-        const data = await check.json();
-        if (data.status === "completed" || data.status === "failed") break;
-        attempts++;
-      }
-      router.push("/");
-    } finally {
-      setGenerating(false);
-    }
+    if (!configId || isGenerating) return;
+    await startGeneration(configId);
+    router.push("/");
   }
 
   if (loading) {
@@ -116,7 +114,7 @@ function SettingsContent() {
     : { user_id: "", digest_time: "07:00", language: "pt-BR", summary_style: "executive", max_articles: 20, created_at: "", updated_at: "" };
 
   return (
-    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 pb-28">
       {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -128,18 +126,36 @@ function SettingsContent() {
           </button>
           <div className="flex items-center gap-2">
             {config && <span className="text-2xl">{config.icon}</span>}
-            <h1 className="text-[22px] font-bold tracking-tight">{config?.name || "Configuracoes"}</h1>
+            <div>
+              <h1 className="text-[22px] font-bold tracking-tight leading-tight">{config?.name || "Configuracoes"}</h1>
+              <p className="text-[12px] text-text-muted leading-tight">Editando configuracoes do digest</p>
+            </div>
           </div>
         </div>
-        <Button
-          onClick={handleRunDigest}
-          loading={generating}
-          size="sm"
-          className="rounded-full"
-        >
-          <Play className="w-3.5 h-3.5 mr-1.5" />
-          {generating ? "Gerando..." : "Rodar digest"}
-        </Button>
+
+        <div className="flex items-center gap-2">
+          {/* Saved toast indicator */}
+          <div
+            className={`flex items-center gap-1.5 text-[12px] font-medium transition-all duration-300 ${
+              savedToast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none"
+            }`}
+            style={{ color: "var(--color-success)" }}
+          >
+            <Check className="w-3.5 h-3.5" />
+            Salvo
+          </div>
+
+          <Button
+            onClick={handleRunDigest}
+            disabled={isGenerating}
+            loading={isGenerating}
+            size="sm"
+            className="rounded-full"
+          >
+            <Play className="w-3.5 h-3.5 mr-1.5" />
+            {isGenerating ? "Gerando..." : "Rodar digest"}
+          </Button>
+        </div>
       </header>
 
       {/* Status card */}
@@ -158,9 +174,9 @@ function SettingsContent() {
       )}
 
       <div className="flex flex-col gap-5">
-        <TopicsList topics={topics} onRefresh={loadData} configId={configId!} />
-        <SourcesList sources={sources} topics={topics} onRefresh={loadData} configId={configId!} />
-        <AlertsList alerts={alerts} onRefresh={loadData} configId={configId!} />
+        <TopicsList topics={topics} onRefresh={handleSaved} configId={configId!} />
+        <SourcesList sources={sources} topics={topics} onRefresh={handleSaved} configId={configId!} />
+        <AlertsList alerts={alerts} onRefresh={handleSaved} configId={configId!} />
         <AdvancedOptions
           settings={settingsForAdvanced}
           exclusions={exclusions}
