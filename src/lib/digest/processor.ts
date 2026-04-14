@@ -15,6 +15,7 @@ import type { RawArticle, RssSource, Topic, ProcessedArticle } from "@/types";
 type SearchAngle = { query: string; maxResults: number; searchDepth: "basic" | "advanced" };
 
 const BATCH_SIZE = 10;
+const MAX_PARALLEL_BATCHES = 3;
 
 interface BatchResult {
   index: number;
@@ -110,40 +111,49 @@ export async function processArticles(
 ): Promise<ProcessedArticle[]> {
   const processed: ProcessedArticle[] = [];
 
+  const batches: RawArticle[][] = [];
   for (let i = 0; i < rawArticles.length; i += BATCH_SIZE) {
-    const batch = rawArticles.slice(i, i + BATCH_SIZE);
+    batches.push(rawArticles.slice(i, i + BATCH_SIZE));
+  }
 
-    let results: BatchResult[];
-    try {
-      results = await processBatch(batch, topics, language, style);
-    } catch (error) {
-      console.error("Batch failed, retrying:", error);
-      try {
-        results = await processBatch(batch, topics, language, style);
-      } catch {
-        console.error("Batch retry failed, skipping batch");
-        continue;
+  // Run batches in parallel with bounded concurrency
+  for (let i = 0; i < batches.length; i += MAX_PARALLEL_BATCHES) {
+    const chunk = batches.slice(i, i + MAX_PARALLEL_BATCHES);
+    const chunkResults = await Promise.all(
+      chunk.map(async (batch) => {
+        try {
+          return { batch, results: await processBatch(batch, topics, language, style) };
+        } catch (error) {
+          console.error("Batch failed, retrying:", error);
+          try {
+            return { batch, results: await processBatch(batch, topics, language, style) };
+          } catch {
+            console.error("Batch retry failed, skipping batch");
+            return { batch, results: [] as BatchResult[] };
+          }
+        }
+      })
+    );
+
+    for (const { batch, results } of chunkResults) {
+      for (const result of results) {
+        const raw = batch[result.index];
+        if (!raw) continue;
+        processed.push({
+          title: raw.title,
+          source_name: raw.source_name,
+          source_url: raw.url,
+          summary: result.summary,
+          key_quote: result.key_quote || null,
+          full_content: raw.full_content || null,
+          topic_id: result.topic_id,
+          alert_id: null,
+          relevance_score: result.relevance_score,
+          is_highlight: false,
+          image_url: raw.image_url || null,
+          published_at: raw.published_at || null,
+        });
       }
-    }
-
-    for (const result of results) {
-      const raw = batch[result.index];
-      if (!raw) continue;
-
-      processed.push({
-        title: raw.title,
-        source_name: raw.source_name,
-        source_url: raw.url,
-        summary: result.summary,
-        key_quote: result.key_quote || null,
-        full_content: raw.full_content || null,
-        topic_id: result.topic_id,
-        alert_id: null,
-        relevance_score: result.relevance_score,
-        is_highlight: false,
-        image_url: raw.image_url || null,
-        published_at: raw.published_at || null,
-      });
     }
   }
 

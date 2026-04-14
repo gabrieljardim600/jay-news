@@ -1,7 +1,8 @@
 import { getAnthropicClient } from "@/lib/anthropic/client";
 import type { RawArticle } from "@/types";
 
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 4;
+const MAX_PARALLEL = 3;
 const MIN_CLEAN_LENGTH = 450;
 
 /**
@@ -24,8 +25,14 @@ export async function cleanArticlesContent(articles: RawArticle[]): Promise<RawA
   const toClean = articles.filter(needsCleaning);
   if (toClean.length === 0) return articles;
 
+  const batches: RawArticle[][] = [];
   for (let i = 0; i < toClean.length; i += BATCH_SIZE) {
-    await cleanBatch(toClean.slice(i, i + BATCH_SIZE));
+    batches.push(toClean.slice(i, i + BATCH_SIZE));
+  }
+
+  // Run batches in parallel with bounded concurrency
+  for (let i = 0; i < batches.length; i += MAX_PARALLEL) {
+    await Promise.all(batches.slice(i, i + MAX_PARALLEL).map(cleanBatch));
   }
 
   return articles;
@@ -73,8 +80,8 @@ ${articleList}`;
 
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 16000,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 8000,
       system: [
         {
           type: "text",
