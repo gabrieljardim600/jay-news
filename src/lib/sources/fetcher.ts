@@ -1,6 +1,7 @@
 import { fetchAllRssFeeds } from "@/lib/sources/rss";
 import { searchAllTopics } from "@/lib/sources/search";
 import { scrapeWebSource } from "@/lib/sources/scraper";
+import { deepFetchSource } from "@/lib/sources/deep-fetch";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RawArticle, Topic, RssSource, Alert } from "@/types";
 
@@ -23,56 +24,44 @@ export async function fetchRawArticles(
     return [{ query: `${topKeywords} ${lang}`, maxResults }];
   });
 
-  // Web sources: Tavily advanced search per domain, using linked topic keywords or source name
-  const webQueries = webSources.flatMap((s) => {
-    const linkedTopic = topics.find((t) => t.id === s.topic_id);
-    const keywords = linkedTopic ? linkedTopic.keywords.slice(0, 3).join(" ") : s.name;
-    const lang = language === "pt-BR" ? "noticias" : "news";
-    const maxResults = s.weight >= 4 ? 8 : s.weight >= 2 ? 5 : 3;
-    const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    return [{
-      query: `${keywords} ${lang}`,
-      maxResults,
-      includeDomains: [domain],
-      searchDepth: "advanced" as const,
-    }];
-  });
-
-  const theNewsQueries = [
-    { query: "the news newsletter brasil hoje", maxResults: 5, includeDomains: ["thenewscc.beehiiv.com"] },
-  ];
-
   const alertQueries = alerts
     .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
     .map((a) => ({ query: a.query, maxResults: 5 }));
 
-  const [rssArticles, searchArticles] = await Promise.all([
-    fetchAllRssFeeds(rssFeeds),
-    searchAllTopics([...theNewsQueries, ...topicQueries, ...webQueries, ...alertQueries]),
-  ]);
+  // Web sources: deep fetch (Jina archive → extract editions → extract stories)
+  // Falls back to Tavily Advanced, then to scraper
+  const webSourceResults = await Promise.allSettled(
+    webSources.map(async (s) => {
+      const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 
-  // Fallback: for web sources that Tavily didn't find results for, try scraping
-  const tavilyCoveredDomains = new Set(
-    searchArticles.map((a) => {
-      try { return new URL(a.url).hostname.replace("www.", ""); } catch { return ""; }
+      // Stage 1: Try deep fetch (two-stage: archive → editions → stories)
+      const deep = await deepFetchSource(domain, s.name);
+      if (deep.length > 0) return deep;
+
+      // Stage 2: Tavily Advanced with domain filter
+      const linkedTopic = topics.find((t) => t.id === s.topic_id);
+      const keywords = linkedTopic ? linkedTopic.keywords.slice(0, 3).join(" ") : s.name;
+      const lang = language === "pt-BR" ? "noticias" : "news";
+      const maxResults = s.weight >= 4 ? 8 : s.weight >= 2 ? 5 : 3;
+      const { searchAllTopics: search } = await import("@/lib/sources/search");
+      const tavily = await search([{
+        query: `${keywords} ${lang}`,
+        maxResults,
+        includeDomains: [domain],
+        searchDepth: "advanced",
+      }]);
+      if (tavily.length > 0) return tavily;
+
+      // Stage 3: Jina + AI scraper fallback
+      return scrapeWebSource(domain, s.name);
     })
   );
+  const webArticles = webSourceResults.flatMap((r) => r.status === "fulfilled" ? r.value : []);
 
-  const uncoveredWebSources = webSources.filter((s) => {
-    const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    return !tavilyCoveredDomains.has(domain) && !tavilyCoveredDomains.has(`www.${domain}`);
-  });
-
-  let scraperArticles: RawArticle[] = [];
-  if (uncoveredWebSources.length > 0) {
-    const scrapeResults = await Promise.allSettled(
-      uncoveredWebSources.map((s) => {
-        const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-        return scrapeWebSource(domain, s.name);
-      })
-    );
-    scraperArticles = scrapeResults.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-  }
+  const [rssArticles, topicArticles] = await Promise.all([
+    fetchAllRssFeeds(rssFeeds),
+    searchAllTopics(topicQueries.concat(alertQueries)),
+  ]);
 
   // Cap RSS per-source by weight (weight * 2, default cap 6)
   const cappedRss = Object.values(
@@ -85,7 +74,7 @@ export async function fetchRawArticles(
     }, {})
   ).flat();
 
-  return [...searchArticles, ...scraperArticles, ...cappedRss];
+  return [...webArticles, ...topicArticles, ...cappedRss];
 }
 
 export async function fetchAndStore(
