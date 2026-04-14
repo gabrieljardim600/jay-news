@@ -105,3 +105,87 @@ export function buildHighlightsUserMessage(articles: ProcessedArticle[]): string
 
   return `Select the 3 most important articles for today's front page:\n\n${list}`;
 }
+
+// ─── Trends search angle generation ─────────────────────────────────────────
+
+export function buildTrendsSearchAnglesMessage(topic: string, keywords: string[], language: string): string {
+  const lang = language === "pt-BR" ? "Portuguese (Brazil)" : "English";
+  const kw = keywords.length > 0 ? `\nAdditional keywords: ${keywords.join(", ")}` : "";
+
+  return `Generate 7 diverse Tavily web search queries to thoroughly cover the topic: "${topic}"${kw}
+
+Search language preference: ${lang} (include some English queries for broader coverage)
+
+The queries should cover different angles:
+- Breaking news and latest developments
+- Analysis, trends, and forecasts
+- Expert opinions and reactions
+- Data, statistics, and reports
+- Historical context or comparisons
+- Industry / market implications
+- International / global perspective
+
+Each query should be specific and targeted — avoid vague terms. Tailor vocabulary to the topic domain.
+
+Return ONLY a JSON array of strings (no explanation):
+["query 1", "query 2", "query 3", "query 4", "query 5", "query 6", "query 7"]`;
+}
+
+// ─── Trends briefing (specialized day summary for trends mode) ───────────────
+
+export function buildTrendsBriefingSystemPrompt(): string {
+  return `You are a research analyst writing a comprehensive intelligence briefing on a specific topic.
+
+Your briefing must cover, in flowing prose:
+1. **Current state** — where things stand right now on this topic
+2. **Key developments** — the most significant recent moves, events, or announcements
+3. **Expert perspectives** — what analysts, insiders, or observers are saying
+4. **Data & signals** — relevant numbers, statistics, or market signals found in the articles
+5. **What to watch** — the 2–3 most important things to follow in the coming days/weeks
+
+RULES:
+- Write in the requested language
+- 4–6 sentences of dense, substantive prose — no filler
+- No bullet points, no headers, no markdown — pure prose
+- Ground every claim in the articles provided — no invented facts
+- Authoritative, precise tone`;
+}
+
+export function buildTrendsBriefingUserMessage(summaries: string[], topic: string, language: string): string {
+  return `Topic: "${topic}"
+Language: ${language}
+
+Article summaries from multiple angles:
+${summaries.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+}
+
+// ─── Recurring trends detection ──────────────────────────────────────────────
+
+export function buildTrendsDetectionSystemPrompt(): string {
+  return `You are a news analyst identifying recurring stories across daily news digests.
+
+Your job is to find 2–4 ongoing stories or themes that appear across multiple days — NOT broad topics like "technology" or "economy", but specific unfolding events like "Fed rate decision uncertainty" or "OpenAI leadership changes".
+
+For each recurring story:
+- "title": 5–7 word name (in the same language as the articles)
+- "description": one sharp sentence explaining what is actually happening (not just what the topic is)
+- "days_active": how many days this story appeared
+- "article_count": approximate total articles about this story
+
+RULES:
+- Prefer stories with clear narrative continuity over broad thematic overlap
+- If genuinely no recurring stories exist, return []
+- OUTPUT: valid JSON array only, no explanation, no markdown fences`;
+}
+
+export function buildTrendsDetectionUserMessage(articlesByDay: Record<string, { title: string; summary: string }[]>): string {
+  const lines = Object.entries(articlesByDay)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, articles]) => {
+      const items = articles.map((a) => `  • ${a.title}: ${a.summary}`).join("\n");
+      return `[${date}]\n${items}`;
+    })
+    .join("\n\n");
+
+  return `Articles from recent digests, grouped by day:\n\n${lines}`;
+}

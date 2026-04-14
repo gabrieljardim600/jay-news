@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { filterArticles } from "@/lib/digest/filter";
 import { enrichArticles } from "@/lib/sources/enrich";
 import { cleanArticlesContent } from "@/lib/sources/content-cleaner";
-import { processArticles, generateDaySummary } from "@/lib/digest/processor";
+import { processArticles, generateDaySummary, generateTrendsSearchAngles, generateTrendsBriefing } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
 import type { RawArticle, Topic, RssSource, Alert, Exclusion, DigestMetadata } from "@/types";
 
@@ -86,6 +86,27 @@ export async function initializeDigest(
 }
 
 /**
+ * Match a processed article to an alert based on keyword overlap with the alert query.
+ * Returns the alert ID if a match is found, null otherwise.
+ */
+function matchArticleToAlerts(article: { title: string; summary: string }, alerts: Alert[]): string | null {
+  const text = `${article.title} ${article.summary}`.toLowerCase();
+  for (const alert of alerts) {
+    if (!alert.is_active) continue;
+    if (alert.expires_at && new Date(alert.expires_at) <= new Date()) continue;
+    const queryWords = alert.query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+    if (queryWords.length === 0) continue;
+    const matches = queryWords.filter((w) => text.includes(w));
+    if (matches.length / queryWords.length >= 0.5) return alert.id;
+  }
+  return null;
+}
+
+/**
  * Run the full digest pipeline for an existing digest record.
  * Writes progress updates to the DB throughout. Safe to call as fire-and-forget.
  */
@@ -119,22 +140,14 @@ export async function runDigestPipeline(
     // ── Trends mode: deep multi-angle search for one topic ──────────
     if (settings.digest_type === "trends" && settings.trend_topic) {
       const topic = settings.trend_topic;
-      const extra = settings.trend_keywords?.join(", ") ?? "";
-      const lang = settings.language === "pt-BR" ? "PT" : "EN";
       const { searchAllTopics } = await import("@/lib/sources/search");
 
-      const searchAngles = [
-        { query: `${topic} ${extra} últimas notícias`.trim(), maxResults: 8, searchDepth: "advanced" as const },
-        { query: `${topic} análise tendências 2024 2025`, maxResults: 6, searchDepth: "advanced" as const },
-        { query: `${topic} impacto novidades lançamentos`, maxResults: 6, searchDepth: "advanced" as const },
-        { query: `${topic} perspectivas especialistas`, maxResults: 5, searchDepth: "advanced" as const },
-        { query: `${topic} dados estatísticas relatório`, maxResults: 5, searchDepth: "basic" as const },
-      ];
-
-      // Add English angles for broader coverage
-      if (lang === "PT") {
-        searchAngles.push({ query: `${topic} news latest ${extra}`.trim(), maxResults: 6, searchDepth: "advanced" as const });
-      }
+      await updateProgress(15, `Gerando ângulos de busca para "${topic}"...`);
+      const searchAngles = await generateTrendsSearchAngles(
+        topic,
+        settings.trend_keywords ?? [],
+        settings.language
+      );
 
       await updateProgress(20, `Buscando cobertura ampla sobre "${topic}"...`);
       allRaw = await searchAllTopics(searchAngles);
@@ -183,6 +196,11 @@ export async function runDigestPipeline(
       await updateProgress(70, `Analisando ${cleaned.length} artigos com IA...`, { source_results: sourceResults });
       const processed = await processArticles(cleaned, trendsTopics, settings.language, settings.summary_style, sources);
 
+      // Match articles to active alerts
+      for (const article of processed) {
+        article.alert_id = matchArticleToAlerts(article, alerts);
+      }
+
       await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
       const articleRows = processed.map((a) => ({
         digest_id: digestId, topic_id: a.topic_id, alert_id: a.alert_id,
@@ -193,8 +211,8 @@ export async function runDigestPipeline(
       }));
       await supabase.from("articles").insert(articleRows);
 
-      await updateProgress(88, "Gerando resumo do dia...", { source_results: sourceResults });
-      const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+      await updateProgress(88, "Gerando briefing do tema...", { source_results: sourceResults });
+      const daySummary = await generateTrendsBriefing(processed.map((a) => a.summary), topic, settings.language);
 
       const metadata: DigestMetadata = {
         total_articles: processed.length,
@@ -373,6 +391,11 @@ export async function runDigestPipeline(
     await updateProgress(70, `Analisando ${cleaned.length} artigos com IA...`, { source_results: sourceResults });
 
     const processed = await processArticles(cleaned, topics, settings.language, settings.summary_style, sources);
+
+    // Match articles to active alerts
+    for (const article of processed) {
+      article.alert_id = matchArticleToAlerts(article, alerts);
+    }
 
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 

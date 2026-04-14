@@ -6,8 +6,13 @@ import {
   buildDaySummaryUserMessage,
   buildHighlightsSystemPrompt,
   buildHighlightsUserMessage,
+  buildTrendsSearchAnglesMessage,
+  buildTrendsBriefingSystemPrompt,
+  buildTrendsBriefingUserMessage,
 } from "@/lib/anthropic/prompts";
 import type { RawArticle, RssSource, Topic, ProcessedArticle } from "@/types";
+
+type SearchAngle = { query: string; maxResults: number; searchDepth: "basic" | "advanced" };
 
 const BATCH_SIZE = 10;
 
@@ -178,6 +183,68 @@ export async function generateDaySummary(summaries: string[], language: string):
       },
     ],
     messages: [{ role: "user", content: buildDaySummaryUserMessage(summaries, language) }],
+  });
+
+  return response.content[0].type === "text" ? response.content[0].text.trim() : "";
+}
+
+export async function generateTrendsSearchAngles(
+  topic: string,
+  keywords: string[],
+  language: string
+): Promise<SearchAngle[]> {
+  const client = getAnthropicClient();
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 512,
+      messages: [{ role: "user", content: buildTrendsSearchAnglesMessage(topic, keywords, language) }],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+    const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const queries: string[] = JSON.parse(jsonText);
+
+    return queries.map((query, i) => ({
+      query,
+      maxResults: i < 3 ? 8 : 5,
+      searchDepth: i < 4 ? ("advanced" as const) : ("basic" as const),
+    }));
+  } catch (err) {
+    console.error("Failed to generate search angles, using fallback:", err);
+    // Fallback to hardcoded angles
+    const extra = keywords.join(" ");
+    const lang = language === "pt-BR" ? "PT" : "EN";
+    return [
+      { query: `${topic} ${extra} últimas notícias`.trim(), maxResults: 8, searchDepth: "advanced" },
+      { query: `${topic} análise tendências`, maxResults: 6, searchDepth: "advanced" },
+      { query: `${topic} impacto novidades`, maxResults: 6, searchDepth: "advanced" },
+      { query: `${topic} especialistas perspectivas`, maxResults: 5, searchDepth: "advanced" },
+      { query: `${topic} dados estatísticas relatório`, maxResults: 5, searchDepth: "basic" },
+      ...(lang === "PT" ? [{ query: `${topic} latest news ${extra}`.trim(), maxResults: 6, searchDepth: "advanced" as const }] : []),
+    ];
+  }
+}
+
+export async function generateTrendsBriefing(
+  summaries: string[],
+  topic: string,
+  language: string
+): Promise<string> {
+  const client = getAnthropicClient();
+
+  const response = await client.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 800,
+    system: [
+      {
+        type: "text",
+        text: buildTrendsBriefingSystemPrompt(),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: buildTrendsBriefingUserMessage(summaries, topic, language) }],
   });
 
   return response.content[0].type === "text" ? response.content[0].text.trim() : "";

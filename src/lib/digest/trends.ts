@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient } from "@/lib/anthropic/client";
+import { buildTrendsDetectionSystemPrompt, buildTrendsDetectionUserMessage } from "@/lib/anthropic/prompts";
 import type { TrendItem } from "@/types";
-
-const anthropic = new Anthropic();
 
 export async function computeTrends(
   digestConfigId: string,
@@ -24,55 +23,42 @@ export async function computeTrends(
     const digestIds = recentDigests.map((d) => d.id as string);
     const { data: articles } = await supabase
       .from("articles")
-      .select("digest_id, title")
+      .select("digest_id, title, summary")
       .in("digest_id", digestIds);
 
     if (!articles || articles.length < 5) return [];
 
     const dateByDigest = new Map(
-      recentDigests.map((d) => [
-        d.id as string,
-        (d.generated_at as string).slice(0, 10),
-      ])
+      recentDigests.map((d) => [d.id as string, (d.generated_at as string).slice(0, 10)])
     );
 
-    const byDate: Record<string, string[]> = {};
+    const byDate: Record<string, { title: string; summary: string }[]> = {};
     for (const article of articles) {
       const date = dateByDigest.get(article.digest_id as string) ?? "unknown";
       if (!byDate[date]) byDate[date] = [];
-      byDate[date].push(article.title as string);
+      byDate[date].push({
+        title: article.title as string,
+        summary: (article.summary as string | null) ?? "",
+      });
     }
 
-    const articlesByDay = Object.entries(byDate)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, titles]) => `[${date}]: ${titles.join(" | ")}`)
-      .join("\n");
-
-    const prompt = `Here are news articles from recent daily digests, grouped by day.
-Identify 2–4 ongoing stories or recurring themes that appear across multiple days.
-Each theme should represent a distinct ongoing news event (not a broad topic like "technology" or "economy").
-
-Articles by day:
-${articlesByDay}
-
-Return ONLY a JSON array (no explanation):
-[{"title":"...","description":"...","days_active":N,"article_count":N}]
-"title": short name for the story (max 6 words, in the same language as the articles)
-"description": one sentence explaining what is happening (same language as articles)
-"days_active": how many days this story appeared
-"article_count": approximate total articles about this story across all days
-
-If no recurring stories are found, return [].`;
-
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
+    const client = getAnthropicClient();
+    const message = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 700,
+      system: [
+        {
+          type: "text",
+          text: buildTrendsDetectionSystemPrompt(),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildTrendsDetectionUserMessage(byDate) }],
     });
 
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const text = message.content[0].type === "text" ? message.content[0].text : "";
+    const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return [];
 
     const trends = JSON.parse(jsonMatch[0]) as TrendItem[];
