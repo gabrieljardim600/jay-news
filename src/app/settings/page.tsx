@@ -90,7 +90,7 @@ function SettingsContent() {
       });
       const { digestId } = await res.json();
       let attempts = 0;
-      while (attempts < 30) {
+      while (attempts < 90) {
         await new Promise((r) => setTimeout(r, 2000));
         const check = await fetch(`/api/digest/${digestId}`);
         const data = await check.json();

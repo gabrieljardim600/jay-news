@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateDigest } from "@/lib/digest/generator";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");

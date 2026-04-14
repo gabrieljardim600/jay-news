@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { fetchRawArticles } from "@/lib/sources/fetcher";
 import { filterArticles } from "@/lib/digest/filter";
 import { processArticles, generateDaySummary } from "@/lib/digest/processor";
 import { computeTrends } from "@/lib/digest/trends";
@@ -55,14 +54,29 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
   const { data: digest, error: digestError } = await supabase
     .from("digests")
-    .insert({ user_id: userId, type, status: "processing", digest_config_id: digestConfigId || null })
+    .insert({ user_id: userId, type, status: "processing", digest_config_id: digestConfigId || null, metadata: { progress: 5, stage: "Carregando configuracao...", source_results: [] } })
     .select()
     .single();
 
   if (digestError || !digest) throw new Error(`Failed to create digest: ${digestError?.message}`);
 
+  // Mutable progress state
+  const progressMeta: Record<string, unknown> = { progress: 5, stage: "Carregando configuracao...", source_results: [] };
+
+  async function updateProgress(progress: number, stage: string, extra?: Record<string, unknown>) {
+    progressMeta.progress = progress;
+    progressMeta.stage = stage;
+    if (extra) Object.assign(progressMeta, extra);
+    await supabase.from("digests").update({
+      metadata: { ...progressMeta },
+    }).eq("id", digest.id);
+  }
+
   try {
     let allRaw: RawArticle[] = [];
+    const sourceResults: { name: string; type: string; status: "ok" | "error" | "empty"; count: number; error?: string }[] = [];
+
+    await updateProgress(10, "Buscando artigos...");
 
     // Try pre-fetched articles first (last 7 days)
     if (digestConfigId) {
@@ -85,12 +99,113 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
           image_url: r.image_url ?? undefined,
           published_at: r.published_at ?? undefined,
         }));
+
+        // Report cached sources
+        const bySrc = new Map<string, number>();
+        for (const a of allRaw) bySrc.set(a.source_name, (bySrc.get(a.source_name) || 0) + 1);
+        for (const [name, count] of bySrc) {
+          sourceResults.push({ name, type: "cache", status: "ok", count });
+        }
       }
     }
 
     // Fall back to live fetch if no pre-fetched articles
     if (allRaw.length === 0) {
-      allRaw = await fetchRawArticles(topics, sources, alerts, settings.language);
+      await updateProgress(15, "Buscando fontes ao vivo...");
+
+      // Fetch each source type separately for per-source error tracking
+      const rssSources = sources.filter((s) => s.source_type !== "web");
+      const webSources = sources.filter((s) => s.source_type === "web");
+
+      // RSS sources — individual tracking
+      const rssResults = await Promise.allSettled(
+        rssSources.map(async (s) => {
+          const { fetchRssFeed } = await import("@/lib/sources/rss");
+          const articles = await fetchRssFeed(s.url, s.name);
+          return { source: s, articles };
+        })
+      );
+
+      const rssArticles: RawArticle[] = [];
+      const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
+      for (let i = 0; i < rssResults.length; i++) {
+        const result = rssResults[i];
+        const source = rssSources[i];
+        if (result.status === "fulfilled" && result.value.articles.length > 0) {
+          const cap = source.weight * 2 || 6;
+          const capped = result.value.articles.slice(0, cap);
+          rssArticles.push(...capped);
+          sourceResults.push({ name: source.name, type: "rss", status: "ok", count: capped.length });
+        } else {
+          const errMsg = result.status === "rejected" ? String(result.reason) : "Nenhum artigo encontrado";
+          sourceResults.push({ name: source.name, type: "rss", status: result.status === "rejected" ? "error" : "empty", count: 0, error: errMsg });
+        }
+      }
+
+      await updateProgress(35, "Buscando fontes web...", { source_results: sourceResults });
+
+      // Web sources — individual tracking
+      const webResults = await Promise.allSettled(
+        webSources.map(async (s) => {
+          const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+          const { deepFetchSource } = await import("@/lib/sources/deep-fetch");
+
+          // Stage 1: deep fetch
+          const deep = await deepFetchSource(domain, s.name);
+          if (deep.length > 0) return { source: s, articles: deep, method: "deep-fetch" };
+
+          // Stage 2: Tavily Advanced
+          const linkedTopic = topics.find((t) => t.id === s.topic_id);
+          const keywords = linkedTopic ? linkedTopic.keywords.slice(0, 3).join(" ") : s.name;
+          const lang = settings.language === "pt-BR" ? "noticias" : "news";
+          const maxResults = s.weight >= 4 ? 8 : s.weight >= 2 ? 5 : 3;
+          const { searchAllTopics: search } = await import("@/lib/sources/search");
+          const tavily = await search([{ query: `${keywords} ${lang}`, maxResults, includeDomains: [domain], searchDepth: "advanced" }]);
+          if (tavily.length > 0) return { source: s, articles: tavily, method: "tavily" };
+
+          // Stage 3: scraper
+          const { scrapeWebSource } = await import("@/lib/sources/scraper");
+          const scraped = await scrapeWebSource(domain, s.name);
+          return { source: s, articles: scraped, method: "scraper" };
+        })
+      );
+
+      const webArticles: RawArticle[] = [];
+      for (let i = 0; i < webResults.length; i++) {
+        const result = webResults[i];
+        const source = webSources[i];
+        if (result.status === "fulfilled" && result.value.articles.length > 0) {
+          webArticles.push(...result.value.articles);
+          sourceResults.push({ name: source.name, type: "web", status: "ok", count: result.value.articles.length });
+        } else {
+          const errMsg = result.status === "rejected" ? String(result.reason) : "Nenhum artigo extraido";
+          sourceResults.push({ name: source.name, type: "web", status: result.status === "rejected" ? "error" : "empty", count: 0, error: errMsg });
+        }
+      }
+
+      await updateProgress(50, "Buscando topicos...", { source_results: sourceResults });
+
+      // Topic and alert searches
+      const topicQueries = topics.flatMap((t) => {
+        const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
+        const topKeywords = t.keywords.slice(0, 3).join(" ");
+        const lang = settings.language === "pt-BR" ? "Brasil noticias" : "news";
+        return [{ query: `${topKeywords} ${lang}`, maxResults }];
+      });
+      const alertQueries = alerts
+        .filter((a) => !a.expires_at || new Date(a.expires_at) > new Date())
+        .map((a) => ({ query: a.query, maxResults: 5 }));
+
+      const { searchAllTopics } = await import("@/lib/sources/search");
+      const topicArticles = await searchAllTopics(topicQueries.concat(alertQueries));
+
+      if (topicArticles.length > 0) {
+        sourceResults.push({ name: "Busca por topicos", type: "search", status: "ok", count: topicArticles.length });
+      } else if (topicQueries.length > 0) {
+        sourceResults.push({ name: "Busca por topicos", type: "search", status: "empty", count: 0 });
+      }
+
+      allRaw = [...webArticles, ...topicArticles, ...rssArticles];
 
       // Store for future use
       if (allRaw.length > 0 && digestConfigId) {
@@ -111,14 +226,24 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       }
     }
 
+    await updateProgress(55, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
+
     const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
     if (filtered.length === 0) {
-      await supabase.from("digests").update({ status: "completed", summary: "Nenhuma noticia encontrada para hoje." }).eq("id", digest.id);
+      await supabase.from("digests").update({
+        status: "completed",
+        summary: "Nenhuma noticia encontrada para hoje.",
+        metadata: { progress: 100, stage: "Concluido", source_results: sourceResults, total_articles: 0 },
+      }).eq("id", digest.id);
       return digest.id;
     }
 
+    await updateProgress(60, `Processando ${filtered.length} artigos com IA...`, { source_results: sourceResults });
+
     const processed = await processArticles(filtered, topics, settings.language, settings.summary_style, sources);
+
+    await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 
     const articleRows = processed.map((a) => ({
       digest_id: digest.id,
@@ -137,6 +262,8 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
 
     await supabase.from("articles").insert(articleRows);
 
+    await updateProgress(85, "Gerando resumo do dia...", { source_results: sourceResults });
+
     const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
     const trends = await computeTrends(digestConfigId ?? "", digest.id, supabase);
 
@@ -145,17 +272,21 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       sources_count: new Set(processed.map((a) => a.source_name)).size,
       topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
       ...(trends.length > 0 ? { trends } : {}),
+      source_results: sourceResults,
     };
 
     await supabase.from("digests").update({
       status: "completed",
       summary: daySummary,
-      metadata,
+      metadata: { ...metadata, progress: 100, stage: "Concluido" },
     }).eq("id", digest.id);
 
     return digest.id;
   } catch (error) {
-    await supabase.from("digests").update({ status: "failed", metadata: { error: String(error) } }).eq("id", digest.id);
+    await supabase.from("digests").update({
+      status: "failed",
+      metadata: { error: String(error), progress: 100, stage: `Erro: ${String(error).slice(0, 100)}` },
+    }).eq("id", digest.id);
     throw error;
   }
 }

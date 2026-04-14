@@ -12,7 +12,7 @@ import { CategorySection } from "@/components/digest/CategorySection";
 import { AlertsSection } from "@/components/digest/AlertsSection";
 import { DigestDateSelector } from "@/components/digest/DigestDateSelector";
 import { TrendingSection } from "@/components/feed/TrendingSection";
-import type { Digest, DigestConfig, DigestWithArticles, Topic } from "@/types";
+import type { Digest, DigestConfig, DigestWithArticles, Topic, SourceResult } from "@/types";
 
 export default function FeedPage() {
   const [configs, setConfigs] = useState<DigestConfig[]>([]);
@@ -23,6 +23,7 @@ export default function FeedPage() {
   const [generating, setGenerating] = useState(false);
   const [genStatus, setGenStatus] = useState("");
   const [genProgress, setGenProgress] = useState(0);
+  const [genSourceResults, setGenSourceResults] = useState<SourceResult[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -90,36 +91,35 @@ export default function FeedPage() {
 
       const { digestId } = await res.json();
       setGenStatus("Buscando artigos...");
-      setGenProgress(15);
+      setGenProgress(10);
+      setGenSourceResults([]);
 
       let attempts = 0;
-      const maxAttempts = 60;
+      const maxAttempts = 90;
       while (attempts < maxAttempts) {
         await new Promise((r) => setTimeout(r, 2000));
         attempts++;
 
-        // Simulate progress
-        const progress = Math.min(90, 15 + (attempts / maxAttempts) * 75);
-        setGenProgress(progress);
-
-        if (attempts < 5) setGenStatus("Buscando artigos...");
-        else if (attempts < 15) setGenStatus("Processando com IA...");
-        else if (attempts < 25) setGenStatus("Gerando resumos...");
-        else setGenStatus("Finalizando...");
-
         try {
           const check = await fetch(`/api/digest/${digestId}`);
           const data = await check.json();
+
+          // Read real progress from metadata
+          if (data.metadata?.progress) setGenProgress(data.metadata.progress);
+          if (data.metadata?.stage) setGenStatus(data.metadata.stage);
+          if (data.metadata?.source_results) setGenSourceResults(data.metadata.source_results);
+
           if (data.status === "completed") {
             setGenProgress(100);
             setGenStatus("Concluido!");
             await loadDigestsForConfig(activeConfigId);
-            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 800);
+            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 1200);
             return;
           }
           if (data.status === "failed") {
-            setGenStatus("Falha na geracao");
-            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
+            const errMsg = data.metadata?.error || "Falha na geracao";
+            setGenStatus(`Erro: ${errMsg.slice(0, 80)}`);
+            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 5000);
             return;
           }
         } catch {
@@ -128,7 +128,7 @@ export default function FeedPage() {
       }
 
       setGenStatus("Timeout — tente novamente");
-      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
+      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); setGenSourceResults([]); }, 3000);
     } catch {
       setGenStatus("Erro de conexao");
       setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
@@ -195,6 +195,21 @@ export default function FeedPage() {
               style={{ width: `${genProgress}%` }}
             />
           </div>
+          {genSourceResults.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1">
+              {genSourceResults.map((sr, i) => (
+                <div key={i} className="flex items-center gap-2 text-[12px]">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    sr.status === "ok" ? "bg-success" : sr.status === "error" ? "bg-danger" : "bg-warning"
+                  }`} />
+                  <span className="text-text-secondary truncate">{sr.name}</span>
+                  <span className="text-text-muted ml-auto shrink-0">
+                    {sr.status === "ok" ? `${sr.count} artigos` : sr.status === "error" ? "Erro" : "Vazio"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

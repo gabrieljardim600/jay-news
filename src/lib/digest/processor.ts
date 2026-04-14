@@ -27,7 +27,16 @@ async function processBatch(articles: RawArticle[], topics: Topic[], language: s
   try {
     return JSON.parse(text);
   } catch {
-    console.error("Failed to parse Claude response:", text.slice(0, 200));
+    // Try to extract JSON from markdown code blocks
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {
+        // fall through
+      }
+    }
+    console.error("Failed to parse Claude response:", text.slice(0, 500));
     return [];
   }
 }

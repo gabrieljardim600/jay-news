@@ -136,12 +136,23 @@ export interface TrendItem {
   article_count: number;
 }
 
+export interface SourceResult {
+  name: string;
+  type: string;
+  status: "ok" | "error" | "empty";
+  count: number;
+  error?: string;
+}
+
 export interface DigestMetadata {
   total_articles?: number;
   sources_count?: number;
   topics_count?: number;
   trends?: TrendItem[];
   error?: string;
+  progress?: number;
+  stage?: string;
+  source_results?: SourceResult[];
 }
 
 export interface DigestWithArticles extends Digest {

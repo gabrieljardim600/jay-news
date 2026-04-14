@@ -15,6 +15,7 @@ export default function WizardPage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("📰");
@@ -40,22 +41,33 @@ export default function WizardPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), icon, color, language, summary_style: summaryStyle, digest_time: digestTime, max_articles: maxArticles }),
     });
+    if (!configRes.ok) {
+      const err = await configRes.json().catch(() => ({}));
+      throw new Error(err.error || `Erro ao criar digest (${configRes.status})`);
+    }
     const config = await configRes.json();
     const configId: string = config.id;
+    if (!configId) throw new Error("Digest criado sem ID");
 
     const topicMap: Record<string, string> = {};
+    const topicErrors: string[] = [];
     await Promise.all(interests.map(async (interest) => {
       const topicRes = await fetch("/api/topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: interest, keywords: [interest], priority: "medium", digest_config_id: configId }),
       });
+      if (!topicRes.ok) {
+        topicErrors.push(interest);
+        return;
+      }
       const topic = await topicRes.json();
       topicMap[interest] = topic.id;
     }));
 
-    await Promise.all(sources.map((source) =>
-      fetch("/api/sources", {
+    const sourceErrors: string[] = [];
+    await Promise.all(sources.map(async (source) => {
+      const res = await fetch("/api/sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,8 +75,9 @@ export default function WizardPage() {
           weight: source.weight, topic_id: source.interest ? topicMap[source.interest] || null : null,
           digest_config_id: configId,
         }),
-      })
-    ));
+      });
+      if (!res.ok) sourceErrors.push(source.name);
+    }));
 
     await Promise.all(exclusions.map((keyword) =>
       fetch("/api/exclusions", {
@@ -74,16 +87,23 @@ export default function WizardPage() {
       })
     ));
 
+    if (topicErrors.length > 0 || sourceErrors.length > 0) {
+      console.warn("Partial save errors:", { topicErrors, sourceErrors });
+    }
+
     return configId;
   }
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     try {
       await saveConfig();
       setDone(true);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido ao salvar";
       console.error("Failed to save:", e);
+      setSaveError(msg);
       setSaving(false);
     }
   }
@@ -130,6 +150,13 @@ export default function WizardPage() {
             name={name} icon={icon} color={color} interests={interests} sources={sources}
             language={language} summaryStyle={summaryStyle} digestTime={digestTime} maxArticles={maxArticles} exclusions={exclusions}
           />
+        )}
+
+        {/* Save error */}
+        {saveError && (
+          <div className="max-w-md mx-auto mb-4 p-3 rounded-[10px] bg-danger/10 border border-danger/20">
+            <p className="text-[13px] text-danger font-medium">{saveError}</p>
+          </div>
         )}
 
         {/* Saving state */}
