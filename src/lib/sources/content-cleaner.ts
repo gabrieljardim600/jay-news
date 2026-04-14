@@ -1,8 +1,8 @@
 import { getAnthropicClient } from "@/lib/anthropic/client";
 import type { RawArticle } from "@/types";
 
-const BATCH_SIZE = 4;
-const MAX_PARALLEL = 3;
+const BATCH_SIZE = 3;
+const MAX_PARALLEL = 6;
 const MIN_CLEAN_LENGTH = 450;
 
 /**
@@ -80,8 +80,8 @@ ${articleList}`;
 
   try {
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 8000,
+      model: "claude-sonnet-4-6",
+      max_tokens: 12000,
       system: [
         {
           type: "text",

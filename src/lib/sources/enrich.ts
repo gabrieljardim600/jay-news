@@ -64,9 +64,59 @@ async function fetchArticlePage(url: string): Promise<{ content: string | null; 
     if (markdown.length < 100) return null;
 
     const content = extractArticleBody(markdown);
-    const imageUrl = extractMainImage(markdown);
+    let imageUrl = extractMainImage(markdown);
+
+    // Fallback: if Jina didn't surface a good image, try og:image from the raw HTML
+    if (!imageUrl) {
+      imageUrl = await fetchOgImage(url);
+    }
 
     return { content, imageUrl };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch og:image / twitter:image from the raw HTML. Used as a fallback when Jina
+ * strips or fails to surface the main image (common on Globo and other JS-heavy sites).
+ */
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; JNewsBot/1.0; +https://jnews.vercel.app)",
+        Accept: "text/html",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+
+    // Read only the first 30KB — og tags are in <head>
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    let html = "";
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    while (bytesRead < 30000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      bytesRead += value.length;
+      if (html.includes("</head>")) break;
+    }
+    reader.cancel().catch(() => {});
+
+    const ogMatch = html.match(/<meta\s+(?:property|name)=["'](?:og:image|twitter:image)(?::src)?["']\s+content=["']([^"']+)["']/i);
+    if (ogMatch) return ogMatch[1];
+
+    const altOg = html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["'](?:og:image|twitter:image)/i);
+    if (altOg) return altOg[1];
+
+    return null;
   } catch {
     return null;
   }
@@ -115,10 +165,10 @@ function extractArticleBody(markdown: string): string | null {
   });
 
   // Full-line noise (exact match)
-  const NOISE_LINES = /^(menu|login|cadastr|acesse sua conta|carregando|assine|inscreva|subscribe|newsletter|compartilh|share|tags?:|leia (mais|tambem)|veja (mais|tambem)|related|comentarios|publicidade|anuncie|copyright|todos os direitos|ultimas noticias|mais lidas|trending|popular|follow us|siga-nos|redes sociais|facebook|twitter|instagram|whatsapp|telegram|youtube|tiktok|pinterest|linkedin|politica de privacidade|termos de uso|fale conosco|sobre nos|contato|anuncie|expediente|colunistas)$/i;
+  const NOISE_LINES = /^(menu|login|cadastr|acesse sua conta|carregando|assine|inscreva|subscribe|newsletter|compartilh|share|tags?:|leia (mais|tambem|também|ainda)|veja (mais|tambem|também)|assista|ouça|related|comentarios|comentários|publicidade|anuncie|copyright|todos os direitos|ultimas noticias|últimas notícias|mais lidas|trending|popular|follow us|siga-nos|redes sociais|facebook|twitter|instagram|whatsapp|telegram|youtube|tiktok|pinterest|linkedin|politica de privacidade|termos de uso|fale conosco|sobre nos|contato|expediente|colunistas|baixe o app|download the app|por [a-z ]{3,40}|—\s*foto:.*|agência [a-z]+|reuters|afp|efe|ap|xinhua)$/i;
 
   // Partial noise — lines CONTAINING these are navigation, not article text
-  const NOISE_CONTAINS = /carregando|acesse sua conta|cadastre-se|menu\s+(principal|autoesporte|principal)|últimas\s+notícias|mais\s+lidas|redes\s+sociais|siga-nos|follow\s+us|subscribe|assine\s+(já|agora|aqui)|inscreva-se|politica\s+de\s+privacidade|termos\s+de\s+uso|todos\s+os\s+direitos|copyright\s+©/i;
+  const NOISE_CONTAINS = /carregando|acesse sua conta|cadastre-se|menu\s+(principal|autoesporte|globo|g1)|últimas\s+notícias|mais\s+lidas|redes\s+sociais|siga-nos|follow\s+us|subscribe\s+now|assine\s+(já|agora|aqui)|inscreva-se|politica\s+de\s+privacidade|termos\s+de\s+uso|todos\s+os\s+direitos|copyright\s+©|baixe\s+(o\s+)?app|leia\s+(mais|também|ainda|na\s+íntegra)|veja\s+(mais|também|no\s+vídeo)|assista\s+(ao|no|acima)|ouça\s+(o|no)|conteúdo\s+patrocinado|sponsored\s+content|parceiro\s+comercial|publieditorial|clique\s+(aqui|aqui para)|saiba\s+mais\s+em|acesse\s+(aqui|agora)/i;
 
   // Remove markdown headers and noise
   body = body.replace(/^#{1,6}\s+.*$/gm, (match) => {

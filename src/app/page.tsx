@@ -15,6 +15,8 @@ import { TrendingSection } from "@/components/feed/TrendingSection";
 import { useGeneration } from "@/context/GenerationContext";
 import type { Digest, DigestConfig, DigestWithArticles, Topic } from "@/types";
 
+type ConfigCacheEntry = { digests: Digest[]; topics: Topic[] };
+
 export default function FeedPage() {
   const [configs, setConfigs] = useState<DigestConfig[]>([]);
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
@@ -27,6 +29,10 @@ export default function FeedPage() {
   const { genState, startGeneration } = useGeneration();
   const prevGenStatus = useRef(genState.status);
 
+  // In-memory caches — make switching between configs and digests instant
+  const configCache = useRef<Map<string, ConfigCacheEntry>>(new Map());
+  const digestCache = useRef<Map<string, DigestWithArticles>>(new Map());
+
   useEffect(() => {
     async function loadConfigs() {
       const res = await fetch("/api/digest-configs");
@@ -36,25 +42,50 @@ export default function FeedPage() {
       setConfigs(data);
       setActiveConfigId(data[0].id);
       setLoading(false);
+      router.prefetch("/manage");
     }
     loadConfigs();
   }, [router]);
 
   const loadDigest = useCallback(async (id: string) => {
+    // Render cached version immediately if we have it
+    const cached = digestCache.current.get(id);
+    if (cached) setCurrent(cached);
+
+    // Always re-fetch in background to get latest (stale-while-revalidate)
     const res = await fetch(`/api/digest/${id}`);
-    const data = await res.json();
+    const data: DigestWithArticles = await res.json();
+    digestCache.current.set(id, data);
     setCurrent(data);
   }, []);
 
-  const loadDigestsForConfig = useCallback(async (configId: string) => {
+  const loadDigestsForConfig = useCallback(async (configId: string, forceRefresh = false) => {
+    // Serve from cache first if available
+    if (!forceRefresh) {
+      const cached = configCache.current.get(configId);
+      if (cached) {
+        setDigests(cached.digests);
+        setTopics(cached.topics);
+        if (cached.digests.length > 0) {
+          loadDigest(cached.digests[0].id);
+        } else {
+          setCurrent(null);
+        }
+        return;
+      }
+    }
+
     const [digestsRes, topicsRes] = await Promise.all([
       fetch(`/api/digests?limit=10&digestConfigId=${configId}`).then((r) => r.json()),
       fetch(`/api/topics?digestConfigId=${configId}`).then((r) => r.json()),
     ]);
-    setDigests(Array.isArray(digestsRes) ? digestsRes : []);
-    setTopics(Array.isArray(topicsRes) ? topicsRes : []);
-    if (Array.isArray(digestsRes) && digestsRes.length > 0) {
-      await loadDigest(digestsRes[0].id);
+    const newDigests = Array.isArray(digestsRes) ? digestsRes : [];
+    const newTopics = Array.isArray(topicsRes) ? topicsRes : [];
+    configCache.current.set(configId, { digests: newDigests, topics: newTopics });
+    setDigests(newDigests);
+    setTopics(newTopics);
+    if (newDigests.length > 0) {
+      await loadDigest(newDigests[0].id);
     } else {
       setCurrent(null);
     }
@@ -64,22 +95,27 @@ export default function FeedPage() {
     if (activeConfigId) loadDigestsForConfig(activeConfigId);
   }, [activeConfigId, loadDigestsForConfig]);
 
-  // Refresh digest list when generation completes
+  // Refresh digest list when generation completes — force cache bust for that config
   useEffect(() => {
     if (
       prevGenStatus.current === "generating" &&
       genState.status === "completed" &&
       genState.configId
     ) {
-      loadDigestsForConfig(genState.configId);
+      configCache.current.delete(genState.configId);
+      loadDigestsForConfig(genState.configId, true);
     }
     prevGenStatus.current = genState.status;
   }, [genState.status, genState.configId, loadDigestsForConfig]);
 
   function handleSelectConfig(id: string) {
     setActiveConfigId(id);
-    setCurrent(null);
-    setDigests([]);
+    // Keep current/digests from cache if available (don't clear)
+    const cached = configCache.current.get(id);
+    if (!cached) {
+      setCurrent(null);
+      setDigests([]);
+    }
   }
 
   async function handleGenerate() {

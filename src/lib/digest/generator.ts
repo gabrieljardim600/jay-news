@@ -198,7 +198,10 @@ export async function runDigestPipeline(
       }
 
       await updateProgress(55, `Extraindo matéria completa de ${filtered.length} artigos...`, { source_results: sourceResults });
-      const enriched = await enrichArticles(filtered);
+      const enrichedRaw = await enrichArticles(filtered);
+
+      // Content quality gate
+      const enriched = enrichedRaw.filter((a) => (a.full_content || a.content || "").length >= 500);
 
       if (enriched.length > 0 && digestConfigId) {
         const rows = enriched.map((a) => ({
@@ -399,7 +402,28 @@ export async function runDigestPipeline(
 
     await updateProgress(55, `Extraindo materia completa de ${filtered.length} artigos...`, { source_results: sourceResults });
 
-    const enriched = await enrichArticles(filtered);
+    const enrichedRaw = await enrichArticles(filtered);
+
+    // Content quality gate: drop articles where we got no substantive content.
+    // Prevents LLM from hallucinating summaries from just the title of cookie/paywall pages.
+    const MIN_SUBSTANTIVE_CONTENT = 500;
+    const enriched = enrichedRaw.filter((a) => {
+      const contentLen = (a.full_content || a.content || "").length;
+      return contentLen >= MIN_SUBSTANTIVE_CONTENT;
+    });
+    const skippedNoContent = enrichedRaw.length - enriched.length;
+    if (skippedNoContent > 0) {
+      console.log(`Dropped ${skippedNoContent} articles with insufficient content`);
+    }
+
+    if (enriched.length === 0) {
+      await supabase.from("digests").update({
+        status: "completed",
+        summary: "Nenhuma materia com conteudo suficiente foi encontrada hoje.",
+        metadata: { progress: 100, stage: "Concluido", source_results: sourceResults, total_articles: 0 },
+      }).eq("id", digestId);
+      return;
+    }
 
     // Store raw content in cache BEFORE cleaning — preserves original as backup
     if (enriched.length > 0 && digestConfigId) {
