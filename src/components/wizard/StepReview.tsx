@@ -1,8 +1,8 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { WeightStars } from "./WeightStars";
+import { Rss, Globe, Check } from "lucide-react";
 import type { WizardSource } from "./StepSources";
 
 interface StepReviewProps {
@@ -25,8 +25,8 @@ const LANG_LABEL: Record<string, string> = {
 };
 
 const STYLE_LABEL: Record<string, string> = {
-  executive: "Executivo (2-3 frases)",
-  detailed: "Detalhado (4-5 frases)",
+  executive: "Executivo",
+  detailed: "Detalhado",
 };
 
 export function StepReview({
@@ -36,83 +36,88 @@ export function StepReview({
   return (
     <div className="flex flex-col gap-4 max-w-xl mx-auto">
       <div>
-        <h2 className="text-xl font-bold mb-1">Revisao</h2>
-        <p className="text-text-secondary text-sm mb-4">Confira tudo antes de criar o digest.</p>
+        <h2 className="text-[22px] font-bold mb-1 tracking-tight">Tudo certo?</h2>
+        <p className="text-text-secondary text-[14px]">Confira antes de criar.</p>
       </div>
 
-      <Card>
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{icon}</span>
-          <div>
-            <p className="text-lg font-bold">{name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-xs text-text-muted">cor do digest</span>
-            </div>
+      {/* Identity */}
+      <Card className="flex items-center gap-3">
+        <div
+          className="w-12 h-12 rounded-[14px] flex items-center justify-center text-2xl"
+          style={{ backgroundColor: `${color}15` }}
+        >
+          {icon}
+        </div>
+        <div>
+          <p className="text-[17px] font-semibold">{name}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+            <span className="text-[12px] text-text-muted">{interests.length} interesses · {sources.length} fontes</span>
           </div>
         </div>
       </Card>
 
+      {/* Interests */}
       <Card>
-        <h3 className="font-semibold mb-2 text-sm text-text-secondary uppercase tracking-wide">
-          Interesses ({interests.length})
+        <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-3">
+          Interesses
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {interests.map((interest) => (
-            <Badge key={interest}>{interest}</Badge>
+            <span key={interest} className="text-[13px] font-medium bg-surface px-3 py-1 rounded-full text-text-secondary">
+              {interest}
+            </span>
           ))}
-          {interests.length === 0 && <p className="text-text-muted text-sm">Nenhum interesse adicionado</p>}
         </div>
       </Card>
 
-      <Card>
-        <h3 className="font-semibold mb-2 text-sm text-text-secondary uppercase tracking-wide">
-          Fontes ({sources.length})
-        </h3>
-        {sources.length === 0 && <p className="text-text-muted text-sm">Nenhuma fonte adicionada</p>}
-        <div className="flex flex-col gap-2">
-          {sources.map((source, i) => (
-            <div key={i} className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <Badge
-                  className={source.testResult?.status === "success"
-                    ? "bg-success/20 text-success shrink-0"
-                    : "bg-border/30 text-text-muted shrink-0"
-                  }
-                >
-                  {source.testResult?.status === "success" ? "OK" : "?"}
-                </Badge>
-                <span className="text-sm truncate">{source.name}</span>
-                {source.source_type === "web" && (
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-accent/10 text-accent font-medium shrink-0">WEB</span>
-                )}
-                {source.interest && (
-                  <span className="text-xs text-text-muted shrink-0">({source.interest})</span>
-                )}
+      {/* Sources */}
+      {sources.length > 0 && (
+        <Card>
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-3">
+            Fontes
+          </h3>
+          <div className="flex flex-col gap-1.5">
+            {sources.map((source, i) => (
+              <div key={i} className="flex items-center justify-between py-1.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  {source.testResult?.status === "success" ? (
+                    <Check className="w-3.5 h-3.5 text-success shrink-0" />
+                  ) : source.source_type === "rss" ? (
+                    <Rss className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                  ) : (
+                    <Globe className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                  )}
+                  <span className="text-[13px] text-text truncate">{source.name}</span>
+                  {source.interest && (
+                    <span className="text-[11px] text-text-muted shrink-0">({source.interest})</span>
+                  )}
+                </div>
+                <WeightStars value={source.weight} onChange={() => {}} size="sm" readOnly />
               </div>
-              <WeightStars value={source.weight} onChange={() => {}} size="sm" readOnly />
-            </div>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </Card>
+      )}
 
+      {/* Preferences */}
       <Card>
-        <h3 className="font-semibold mb-3 text-sm text-text-secondary uppercase tracking-wide">
-          Preferencias
+        <h3 className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-3">
+          Configuracao
         </h3>
-        <div className="grid grid-cols-2 gap-y-2 text-sm">
-          <span className="text-text-secondary">Idioma:</span>
-          <span>{LANG_LABEL[language] || language}</span>
-          <span className="text-text-secondary">Estilo:</span>
-          <span>{STYLE_LABEL[summaryStyle] || summaryStyle}</span>
-          <span className="text-text-secondary">Horario:</span>
-          <span>{digestTime}</span>
-          <span className="text-text-secondary">Max artigos:</span>
-          <span>{maxArticles}</span>
+        <div className="grid grid-cols-2 gap-y-2 text-[13px]">
+          <span className="text-text-secondary">Idioma</span>
+          <span className="text-text">{LANG_LABEL[language] || language}</span>
+          <span className="text-text-secondary">Estilo</span>
+          <span className="text-text">{STYLE_LABEL[summaryStyle] || summaryStyle}</span>
+          <span className="text-text-secondary">Horario</span>
+          <span className="text-text">{digestTime}</span>
+          <span className="text-text-secondary">Max artigos</span>
+          <span className="text-text">{maxArticles}</span>
           {exclusions.length > 0 && (
             <>
-              <span className="text-text-secondary">Exclusoes:</span>
-              <span className="truncate">{exclusions.join(", ")}</span>
+              <span className="text-text-secondary">Exclusoes</span>
+              <span className="text-text truncate">{exclusions.join(", ")}</span>
             </>
           )}
         </div>

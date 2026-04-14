@@ -9,10 +9,13 @@ export function AlertsSection({ articles }: AlertsSectionProps) {
   if (!articles || articles.length === 0) return null;
 
   return (
-    <div className="border-l-4 border-l-primary pl-4 py-2">
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">
-        ⚡ Alertas
-      </p>
+    <div className="bg-warning/5 rounded-[14px] p-4 border border-warning/10">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-2 h-2 rounded-full bg-warning" />
+        <span className="text-[13px] font-semibold uppercase tracking-widest text-warning">
+          Alertas
+        </span>
+      </div>
       <div className="flex flex-col">
         {articles.map((article) => (
           <ArticleRow key={article.id} article={article} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
+import { X } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 
 interface ChipInputProps {
@@ -40,23 +41,23 @@ export function ChipInput({
   return (
     <div className={twMerge("flex flex-col gap-1.5", className)}>
       {label && (
-        <label className="text-sm text-text-secondary font-medium">
+        <label className="text-[13px] text-text-secondary font-medium">
           {label}
         </label>
       )}
-      <div className="flex flex-wrap gap-2 bg-surface border border-border rounded-md px-3 py-2 focus-within:border-primary transition-colors">
+      <div className="flex flex-wrap gap-1.5 bg-surface border border-border rounded-[10px] px-3 py-2.5 focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition-all">
         {values.map((val, i) => (
           <span
             key={i}
-            className="inline-flex items-center gap-1 bg-surface-light text-text-secondary text-sm px-2 py-1 rounded"
+            className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[13px] font-medium px-2.5 py-1 rounded-full"
           >
             {val}
             <button
               type="button"
               onClick={() => removeChip(i)}
-              className="text-text-muted hover:text-danger transition-colors"
+              className="hover:text-danger transition-colors"
             >
-              ✕
+              <X className="w-3 h-3" />
             </button>
           </span>
         ))}
@@ -65,7 +66,7 @@ export function ChipInput({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={values.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-[120px] bg-transparent text-text placeholder:text-text-muted outline-none py-1"
+          className="flex-1 min-w-[120px] bg-transparent text-[15px] text-text placeholder:text-text-muted outline-none py-0.5"
         />
       </div>
     </div>

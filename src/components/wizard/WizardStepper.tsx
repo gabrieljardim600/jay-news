@@ -1,5 +1,7 @@
 "use client";
 
+import { Check } from "lucide-react";
+
 const STEPS = ["Interesses", "Fontes", "Preferencias", "Revisao"];
 
 interface WizardStepperProps {
@@ -9,33 +11,44 @@ interface WizardStepperProps {
 
 export function WizardStepper({ currentStep, onStepClick }: WizardStepperProps) {
   return (
-    <div className="flex items-center justify-center gap-1 mb-8">
+    <div className="flex items-center justify-center gap-0 mb-10">
       {STEPS.map((label, i) => {
         const isCompleted = i < currentStep;
         const isCurrent = i === currentStep;
-        const isClickable = i < currentStep;
 
         return (
           <div key={i} className="flex items-center">
             <button
               type="button"
-              onClick={() => isClickable && onStepClick(i)}
-              disabled={!isClickable}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all text-sm font-medium ${
-                isCurrent
-                  ? "bg-primary text-white"
-                  : isCompleted
-                    ? "bg-surface-light text-primary cursor-pointer hover:bg-surface"
-                    : "bg-surface text-text-muted cursor-default"
-              }`}
+              onClick={() => isCompleted && onStepClick(i)}
+              disabled={!isCompleted}
+              className="flex items-center gap-2"
             >
-              <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-black/20">
-                {isCompleted ? "✓" : i + 1}
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold transition-all duration-300 ${
+                  isCurrent
+                    ? "bg-primary text-white shadow-sm shadow-primary/30"
+                    : isCompleted
+                      ? "bg-success text-white cursor-pointer"
+                      : "bg-surface text-text-muted"
+                }`}
+              >
+                {isCompleted ? <Check className="w-3.5 h-3.5" /> : i + 1}
+              </div>
+              <span
+                className={`text-[13px] font-medium hidden sm:inline transition-colors ${
+                  isCurrent
+                    ? "text-text"
+                    : isCompleted
+                      ? "text-text-secondary cursor-pointer hover:text-text"
+                      : "text-text-muted"
+                }`}
+              >
+                {label}
               </span>
-              <span className="hidden sm:inline">{label}</span>
             </button>
             {i < STEPS.length - 1 && (
-              <div className={`w-6 h-0.5 mx-1 ${isCompleted ? "bg-primary" : "bg-border"}`} />
+              <div className={`w-10 h-[1.5px] mx-3 transition-colors duration-300 ${isCompleted ? "bg-success" : "bg-border"}`} />
             )}
           </div>
         );

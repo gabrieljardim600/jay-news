@@ -8,26 +8,20 @@ export function TrendingSection({ trends }: TrendingSectionProps) {
   if (trends.length === 0) return null;
 
   return (
-    <div className="py-4 border-b border-border">
-      <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">
-        📈 Em alta
-      </p>
-      <div className="flex flex-col">
-        {trends.map((trend, i) => (
-          <div
-            key={i}
-            className="flex flex-col gap-0.5 py-2 border-b border-border/30 last:border-0"
-          >
-            <span className="text-sm font-semibold text-text">{trend.title}</span>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              {trend.description}
-            </p>
-            <span className="text-xs text-text-muted mt-0.5">
-              {trend.days_active} dias · {trend.article_count} artigos
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 pb-2">
+      {trends.map((trend, i) => (
+        <div
+          key={i}
+          className="flex-none bg-surface rounded-[12px] px-4 py-3 min-w-[200px] max-w-[260px] border border-border"
+        >
+          <span className="text-[13px] font-semibold text-text leading-tight line-clamp-1">
+            {trend.title}
+          </span>
+          <p className="text-[11px] text-text-muted mt-0.5 line-clamp-1">
+            {trend.article_count} artigos · {trend.days_active}d
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

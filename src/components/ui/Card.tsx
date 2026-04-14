@@ -8,7 +8,7 @@ export function Card({ className, children, ...props }: CardProps) {
   return (
     <div
       className={twMerge(
-        "bg-card rounded-md border border-border/20 p-4",
+        "bg-card glass rounded-[14px] border border-border p-5",
         className
       )}
       {...props}

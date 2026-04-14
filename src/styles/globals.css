@@ -1,22 +1,24 @@
 @import "tailwindcss";
 
-/* ─── Invariant tokens — baked at build time ─────────────────────────── */
+/* ─── Invariant tokens ─────────────────────────────────────────────── */
 @theme {
-  --color-primary: #fb830e;
-  --color-primary-hover: #fba24b;
-  --color-secondary: #08a6ff;
-  --color-secondary-hover: #6ac9ff;
-  --color-danger: #f54336;
-  --color-success: #75f94c;
-  --color-gold: #c0b662;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --color-primary: #007AFF;
+  --color-primary-hover: #0066D6;
+  --color-secondary: #5856D6;
+  --color-secondary-hover: #4744B8;
+  --color-danger: #FF3B30;
+  --color-success: #34C759;
+  --color-warning: #FF9500;
+  --color-gold: #AF8F3E;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
   --font-heading: var(--font-heading);
   --font-body: var(--font-body);
 }
 
-/* ─── Switchable tokens — utilities reference CSS vars at runtime ─────── */
+/* ─── Switchable tokens ────────────────────────────────────────────── */
 @theme inline {
   --color-background: var(--jn-bg);
   --color-card: var(--jn-card);
@@ -29,36 +31,37 @@
   --color-text-muted: var(--jn-text-muted);
 }
 
-/* ─── Dark theme (default) ────────────────────────────────────────────── */
+/* ─── Dark theme (default) ─────────────────────────────────────────── */
 :root,
 html.dark {
-  --jn-bg: #151515;
-  --jn-card: rgba(28, 29, 30, 0.8);
-  --jn-card-solid: #1c1d1e;
-  --jn-surface: #1d1d1d;
-  --jn-surface-light: #282828;
-  --jn-border: #333333;
-  --jn-text: #ffffff;
-  --jn-text-secondary: #828282;
-  --jn-text-muted: #4f4f4f;
+  --jn-bg: #000000;
+  --jn-card: rgba(28, 28, 30, 0.72);
+  --jn-card-solid: #1c1c1e;
+  --jn-surface: #1c1c1e;
+  --jn-surface-light: #2c2c2e;
+  --jn-border: rgba(255, 255, 255, 0.08);
+  --jn-text: #f5f5f7;
+  --jn-text-secondary: #98989d;
+  --jn-text-muted: #636366;
 }
 
-/* ─── Light theme ─────────────────────────────────────────────────────── */
+/* ─── Light theme ──────────────────────────────────────────────────── */
 html.light {
-  --jn-bg: #f8f7f4;
-  --jn-card: #ffffff;
+  --jn-bg: #f5f5f7;
+  --jn-card: rgba(255, 255, 255, 0.72);
   --jn-card-solid: #ffffff;
-  --jn-surface: #f1f0ed;
-  --jn-surface-light: #e8e7e4;
-  --jn-border: #e0deda;
-  --jn-text: #111111;
-  --jn-text-secondary: #555555;
-  --jn-text-muted: #999999;
+  --jn-surface: #f2f2f7;
+  --jn-surface-light: #e5e5ea;
+  --jn-border: rgba(0, 0, 0, 0.06);
+  --jn-text: #1d1d1f;
+  --jn-text-secondary: #6e6e73;
+  --jn-text-muted: #aeaeb2;
 }
 
-/* ─── Base styles ─────────────────────────────────────────────────────── */
+/* ─── Base ─────────────────────────────────────────────────────────── */
 html {
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
@@ -69,4 +72,15 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
+  letter-spacing: -0.022em;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Glassmorphism ────────────────────────────────────────────────── */
+.glass {
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }

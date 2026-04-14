@@ -1,5 +1,6 @@
 "use client";
 
+import { relativeDate } from "@/lib/utils/relative-date";
 import type { Digest } from "@/types";
 
 interface DigestDateSelectorProps {
@@ -12,20 +13,23 @@ export function DigestDateSelector({ digests, selectedId, onSelect }: DigestDate
   if (digests.length <= 1) return null;
 
   return (
-    <div className="flex gap-2 overflow-x-auto py-2 pb-3 no-scrollbar">
-      {digests.map((digest) => (
-        <button
-          key={digest.id}
-          onClick={() => onSelect(digest.id)}
-          className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition-all ${
-            digest.id === selectedId
-              ? "bg-primary text-white font-semibold"
-              : "bg-surface text-text-secondary border border-border hover:border-primary/40 hover:text-text"
-          }`}
-        >
-          {new Date(digest.generated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-        </button>
-      ))}
+    <div className="flex gap-1.5 overflow-x-auto py-2 no-scrollbar">
+      {digests.map((digest) => {
+        const isSelected = digest.id === selectedId;
+        return (
+          <button
+            key={digest.id}
+            onClick={() => onSelect(digest.id)}
+            className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-all duration-200 ${
+              isSelected
+                ? "bg-text text-background"
+                : "text-text-secondary hover:bg-surface"
+            }`}
+          >
+            {relativeDate(digest.generated_at) || new Date(digest.generated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+          </button>
+        );
+      })}
     </div>
   );
 }

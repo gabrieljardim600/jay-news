@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { TopicsList } from "@/components/settings/TopicsList";
 import { SourcesList } from "@/components/settings/SourcesList";
@@ -18,6 +20,7 @@ function SettingsContent() {
   const [exclusions, setExclusions] = useState<Exclusion[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const configId = searchParams.get("configId");
@@ -43,10 +46,7 @@ function SettingsContent() {
   }, [configId]);
 
   useEffect(() => {
-    if (!configId) {
-      router.push("/");
-      return;
-    }
+    if (!configId) { router.push("/"); return; }
     loadData();
   }, [configId, loadData, router]);
 
@@ -79,48 +79,85 @@ function SettingsContent() {
     router.push("/");
   }
 
+  async function handleRunDigest() {
+    if (!configId) return;
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/digest/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ digestConfigId: configId }),
+      });
+      const { digestId } = await res.json();
+      let attempts = 0;
+      while (attempts < 30) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const check = await fetch(`/api/digest/${digestId}`);
+        const data = await check.json();
+        if (data.status === "completed" || data.status === "failed") break;
+        attempts++;
+      }
+      router.push("/");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
 
-  // Map DigestConfig to UserSettings shape for AdvancedOptions (reuse existing component)
   const settingsForAdvanced: UserSettings = config
-    ? {
-        user_id: config.user_id,
-        digest_time: config.digest_time,
-        language: config.language,
-        summary_style: config.summary_style,
-        max_articles: config.max_articles,
-        created_at: config.created_at,
-        updated_at: config.updated_at,
-      }
-    : {
-        user_id: "",
-        digest_time: "07:00",
-        language: "pt-BR",
-        summary_style: "executive",
-        max_articles: 20,
-        created_at: "",
-        updated_at: "",
-      };
+    ? { user_id: config.user_id, digest_time: config.digest_time, language: config.language, summary_style: config.summary_style, max_articles: config.max_articles, created_at: config.created_at, updated_at: config.updated_at }
+    : { user_id: "", digest_time: "07:00", language: "pt-BR", summary_style: "executive", max_articles: 20, created_at: "", updated_at: "" };
 
   return (
-    <div className="min-h-screen max-w-4xl mx-auto px-4 py-8">
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
+      {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          {config && <span className="text-2xl">{config.icon}</span>}
-          <h1 className="text-2xl font-bold">{config?.name || "Configuracoes"}</h1>
+          <button
+            onClick={() => router.push("/")}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-secondary"
+          >
+            <ArrowLeft className="w-[18px] h-[18px]" />
+          </button>
+          <div className="flex items-center gap-2">
+            {config && <span className="text-2xl">{config.icon}</span>}
+            <h1 className="text-[22px] font-bold tracking-tight">{config?.name || "Configuracoes"}</h1>
+          </div>
         </div>
-        <Button variant="outline" onClick={() => router.push("/")}>
-          Voltar
+        <Button
+          onClick={handleRunDigest}
+          loading={generating}
+          size="sm"
+          className="rounded-full"
+        >
+          <Play className="w-3.5 h-3.5 mr-1.5" />
+          {generating ? "Gerando..." : "Rodar digest"}
         </Button>
       </header>
 
-      <div className="flex flex-col gap-6">
+      {/* Status card */}
+      {config && (
+        <Card className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-2.5 h-2.5 rounded-full ${config.is_active ? "bg-success" : "bg-text-muted"}`} />
+            <span className="text-[14px] text-text-secondary">
+              {config.is_active ? "Ativo" : "Inativo"} · {config.digest_time} · {config.max_articles} artigos max
+            </span>
+          </div>
+          <span className="text-[12px] text-text-muted">
+            {config.language === "pt-BR" ? "PT-BR" : config.language.toUpperCase()} · {config.summary_style === "executive" ? "Executivo" : "Detalhado"}
+          </span>
+        </Card>
+      )}
+
+      <div className="flex flex-col gap-5">
         <TopicsList topics={topics} onRefresh={loadData} configId={configId!} />
         <SourcesList sources={sources} topics={topics} onRefresh={loadData} configId={configId!} />
         <AlertsList alerts={alerts} onRefresh={loadData} configId={configId!} />
@@ -132,27 +169,22 @@ function SettingsContent() {
           onRemoveExclusion={handleRemoveExclusion}
         />
 
-        <div className="border-t border-border pt-6">
-          <Button
-            variant="ghost"
-            className="text-danger hover:text-danger"
-            onClick={() => setDeleteModalOpen(true)}
-          >
-            Deletar este digest
-          </Button>
-        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-2 text-danger text-[14px] font-medium mt-4 hover:underline self-start"
+        >
+          <Trash2 className="w-4 h-4" />
+          Deletar este digest
+        </button>
       </div>
 
       <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Deletar Digest">
-        <p className="text-text-secondary mb-4">
-          Tem certeza que deseja deletar &quot;{config?.icon} {config?.name}&quot;? Isso ira remover todas as fontes, temas e alertas associados.
+        <p className="text-text-secondary text-[14px] mb-5 leading-relaxed">
+          Tem certeza que deseja deletar &quot;{config?.icon} {config?.name}&quot;? Todas as fontes, temas e alertas associados serao removidos.
         </p>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
-          <Button
-            onClick={handleDeleteConfig}
-            className="bg-danger hover:bg-danger/80 text-white"
-          >
+          <Button onClick={handleDeleteConfig} className="bg-danger hover:bg-danger/80 text-white">
             Deletar
           </Button>
         </div>
@@ -165,7 +197,7 @@ export default function SettingsPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     }>
       <SettingsContent />

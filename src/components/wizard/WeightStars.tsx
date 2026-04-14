@@ -8,8 +8,6 @@ interface WeightStarsProps {
 }
 
 export function WeightStars({ value, onChange, size = "md", readOnly = false }: WeightStarsProps) {
-  const starSize = size === "sm" ? "text-sm" : "text-xl";
-
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -18,11 +16,13 @@ export function WeightStars({ value, onChange, size = "md", readOnly = false }: 
           type="button"
           onClick={() => !readOnly && onChange(star)}
           disabled={readOnly}
-          className={`${starSize} transition-colors ${
-            star <= value ? "text-primary" : "text-text-muted"
-          } ${!readOnly ? "hover:text-primary-hover cursor-pointer" : "cursor-default"}`}
+          className={`transition-all duration-150 ${
+            size === "sm" ? "text-[14px]" : "text-[20px]"
+          } ${
+            star <= value ? "text-primary" : "text-text-muted/30"
+          } ${!readOnly ? "hover:text-primary hover:scale-110 cursor-pointer" : "cursor-default"}`}
         >
-          ★
+          ●
         </button>
       ))}
     </div>

@@ -11,11 +11,11 @@ export function Badge({ variant = "default", children, className }: BadgeProps) 
   return (
     <span
       className={twMerge(
-        clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium", {
-          "bg-primary/20 text-primary": variant === "high",
-          "bg-secondary/20 text-secondary": variant === "medium",
-          "bg-border/30 text-text-secondary": variant === "low",
-          "bg-surface-light text-text-secondary": variant === "default",
+        clsx("inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-semibold tracking-wide", {
+          "bg-primary/15 text-primary": variant === "high",
+          "bg-secondary/15 text-secondary": variant === "medium",
+          "bg-surface text-text-muted": variant === "low",
+          "bg-surface text-text-secondary": variant === "default",
         }),
         className
       )}

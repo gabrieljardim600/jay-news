@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
+import { Settings, RefreshCw } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
 import { DigestTabs } from "@/components/feed/DigestTabs";
@@ -22,22 +22,14 @@ export default function FeedPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
   const router = useRouter();
 
-  // Load configs on mount
   useEffect(() => {
     async function loadConfigs() {
       const res = await fetch("/api/digest-configs");
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
+      if (!res.ok) { setLoading(false); return; }
       const data: DigestConfig[] = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        router.push("/wizard");
-        return;
-      }
+      if (!Array.isArray(data) || data.length === 0) { router.push("/wizard"); return; }
       setConfigs(data);
       setActiveConfigId(data[0].id);
       setLoading(false);
@@ -106,59 +98,85 @@ export default function FeedPage() {
 
   const activeConfig = configs.find((c) => c.id === activeConfigId);
 
-  if (loading) {
-    return <FeedSkeleton />;
-  }
+  if (loading) return <FeedSkeleton />;
 
   return (
-    <div className="min-h-screen max-w-4xl mx-auto px-4 py-8">
-      <header className="flex items-center justify-between mb-2">
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
+      {/* Header */}
+      <header className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold font-heading">JNews</h1>
-          <p className="text-sm text-text-secondary">
-            {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+          <h1 className="text-[28px] font-bold font-heading tracking-tight">JNews</h1>
+          <p className="text-[13px] text-text-muted mt-0.5">
+            {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-1 items-center">
           <ThemeToggle />
-          <Button variant="ghost" onClick={() => setShowSettings(true)} title="Configurações">⚙</Button>
-          <Button onClick={handleGenerate} loading={generating}>
-            {generating ? "Gerando..." : "Gerar Digest"}
-          </Button>
+          {activeConfigId && (
+            <button
+              onClick={() => router.push(`/settings?configId=${activeConfigId}`)}
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
+            >
+              <Settings className="w-[18px] h-[18px]" />
+            </button>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className={`ml-1 h-9 px-4 flex items-center gap-2 rounded-full text-[13px] font-medium transition-all duration-200 active:scale-[0.97] ${
+              generating
+                ? "bg-surface text-text-muted"
+                : "bg-primary text-white hover:bg-primary-hover shadow-sm"
+            }`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${generating ? "animate-spin" : ""}`} />
+            {generating ? "Gerando..." : "Atualizar"}
+          </button>
         </div>
       </header>
 
+      {/* Digest tabs */}
       <DigestTabs configs={configs} activeId={activeConfigId} onSelect={handleSelectConfig} />
 
+      {/* Date selector */}
       <DigestDateSelector
         digests={digests}
         selectedId={current?.id || null}
         onSelect={loadDigest}
       />
 
+      {/* Empty state */}
       {!current && digests.length === 0 && (
-        <div className="text-center py-20">
-          <div className="text-5xl mb-4">📭</div>
-          <p className="text-text-secondary text-lg mb-2">Nenhum digest ainda</p>
-          <p className="text-text-muted text-sm mb-6">Clique em &quot;Gerar Digest&quot; para criar o primeiro.</p>
+        <div className="text-center py-24">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
+            <span className="text-2xl">📭</span>
+          </div>
+          <p className="text-text-secondary text-[17px] font-medium mb-1">Nenhum digest ainda</p>
+          <p className="text-text-muted text-[14px]">Clique em &quot;Atualizar&quot; para gerar o primeiro.</p>
         </div>
       )}
 
+      {/* Digest content */}
       {current && (
-        <div className="flex flex-col gap-6 mt-6">
+        <div className="flex flex-col gap-8 mt-4">
           <DaySummary summary={current.summary} />
+
           {current.metadata?.trends && current.metadata.trends.length > 0 && (
             <TrendingSection trends={current.metadata.trends} />
           )}
+
           <HighlightCards articles={current.highlights} />
+
           {Object.entries(current.by_topic)
             .filter(([key]) => key !== "uncategorized")
             .map(([topicId, articles]) => (
               <CategorySection key={topicId} name={getTopicName(topicId)} articles={articles} />
             ))}
+
           {current.by_topic["uncategorized"] && (
             <CategorySection name="Outros" articles={current.by_topic["uncategorized"]} />
           )}
+
           <AlertsSection articles={current.alert_articles} />
         </div>
       )}

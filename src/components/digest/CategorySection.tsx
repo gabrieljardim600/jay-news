@@ -19,19 +19,20 @@ export function CategorySection({ name, articles }: CategorySectionProps) {
     <div>
       <button
         type="button"
-        className="flex items-center justify-between w-full text-left py-3 border-b border-border group"
+        className="flex items-center justify-between w-full text-left py-3 group"
         onClick={() => setOpen(!open)}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-1 h-5 bg-primary rounded-full" />
-          <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary group-hover:text-text transition-colors">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[13px] font-semibold uppercase tracking-widest text-text-muted group-hover:text-text transition-colors">
             {name}
           </span>
-          <span className="text-xs text-text-muted bg-surface px-1.5 py-0.5 rounded">
+          <span className="text-[11px] text-text-muted bg-surface px-2 py-0.5 rounded-full font-medium">
             {articles.length}
           </span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          className={`w-4 h-4 text-text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
       </button>
       {open && (
         <div className="flex flex-col">

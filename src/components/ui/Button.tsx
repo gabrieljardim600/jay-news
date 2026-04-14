@@ -20,16 +20,16 @@ export function Button({
     <button
       className={twMerge(
         clsx(
-          "inline-flex items-center justify-center font-semibold rounded-md transition-all duration-300",
+          "inline-flex items-center justify-center font-medium rounded-[10px] transition-all duration-200 active:scale-[0.97]",
           {
-            "bg-primary text-white hover:bg-primary-hover": variant === "primary",
-            "bg-secondary text-white hover:bg-secondary-hover": variant === "secondary",
+            "bg-primary text-white hover:bg-primary-hover shadow-sm": variant === "primary",
+            "bg-secondary text-white hover:bg-secondary-hover shadow-sm": variant === "secondary",
             "border border-border text-text hover:bg-surface-light": variant === "outline",
-            "text-text-secondary hover:text-text hover:bg-surface-light": variant === "ghost",
-            "px-3 py-1.5 text-sm": size === "sm",
-            "px-5 py-3 text-base": size === "md",
-            "px-6 py-4 text-lg": size === "lg",
-            "opacity-50 cursor-not-allowed": disabled || loading,
+            "text-text-secondary hover:text-text hover:bg-surface": variant === "ghost",
+            "px-3 py-1.5 text-[13px]": size === "sm",
+            "px-5 py-2.5 text-[15px]": size === "md",
+            "px-6 py-3 text-[17px]": size === "lg",
+            "opacity-40 pointer-events-none": disabled || loading,
           }
         ),
         className

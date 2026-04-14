@@ -33,49 +33,48 @@ export function StepPreferences({
   onLanguageChange, onSummaryStyleChange, onDigestTimeChange, onMaxArticlesChange, onExclusionsChange,
 }: StepPreferencesProps) {
   return (
-    <div className="flex flex-col gap-5 max-w-xl mx-auto">
+    <div className="flex flex-col gap-6 max-w-xl mx-auto">
       <div>
-        <h2 className="text-xl font-bold mb-1">Preferencias</h2>
-        <p className="text-text-secondary text-sm mb-4">
-          Configure como seu digest sera gerado.
+        <h2 className="text-[22px] font-bold mb-1 tracking-tight">Preferencias</h2>
+        <p className="text-text-secondary text-[14px]">
+          Ajuste como seu digest sera gerado.
         </p>
       </div>
 
-      <Select
-        label="Idioma dos resumos"
-        value={language}
-        onChange={(e) => onLanguageChange(e.target.value)}
-        options={LANGUAGE_OPTIONS}
-      />
-
-      <Select
-        label="Estilo do resumo"
-        value={summaryStyle}
-        onChange={(e) => onSummaryStyleChange(e.target.value)}
-        options={STYLE_OPTIONS}
-      />
-
-      <Input
-        label="Horario do digest"
-        type="time"
-        value={digestTime}
-        onChange={(e) => onDigestTimeChange(e.target.value)}
-      />
-
-      <Input
-        label="Maximo de artigos por digest"
-        type="number"
-        value={maxArticles}
-        onChange={(e) => onMaxArticlesChange(Math.min(50, Math.max(5, parseInt(e.target.value) || 20)))}
-        min={5}
-        max={50}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Idioma dos resumos"
+          value={language}
+          onChange={(e) => onLanguageChange(e.target.value)}
+          options={LANGUAGE_OPTIONS}
+        />
+        <Select
+          label="Estilo do resumo"
+          value={summaryStyle}
+          onChange={(e) => onSummaryStyleChange(e.target.value)}
+          options={STYLE_OPTIONS}
+        />
+        <Input
+          label="Horario do digest"
+          type="time"
+          value={digestTime}
+          onChange={(e) => onDigestTimeChange(e.target.value)}
+        />
+        <Input
+          label="Max artigos"
+          type="number"
+          value={maxArticles}
+          onChange={(e) => onMaxArticlesChange(Math.min(50, Math.max(5, parseInt(e.target.value) || 20)))}
+          min={5}
+          max={50}
+        />
+      </div>
 
       <ChipInput
-        label="Exclusoes (palavras para filtrar dos titulos)"
+        label="Exclusoes (termos para ignorar)"
         values={exclusions}
         onChange={onExclusionsChange}
-        placeholder="spam, clickbait, publicidade..."
+        placeholder="spam, clickbait..."
       />
     </div>
   );

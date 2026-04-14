@@ -13,19 +13,18 @@ export function DigestTabs({ configs, activeId, onSelect }: DigestTabsProps) {
   const router = useRouter();
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-4 scrollbar-hide border-b border-border">
+    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mb-6">
       {configs.map((config) => {
         const isActive = activeId === config.id;
         return (
           <button
             key={config.id}
             onClick={() => onSelect(config.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-all border-b-[3px] -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-[14px] font-medium whitespace-nowrap rounded-full transition-all duration-200 ${
               isActive
-                ? "text-white border-current"
-                : "text-text-muted border-transparent hover:text-text hover:border-border"
+                ? "bg-text text-background"
+                : "text-text-muted hover:text-text hover:bg-surface"
             }`}
-            style={isActive ? { borderColor: config.color, color: config.color } : undefined}
           >
             <span>{config.icon}</span>
             <span>{config.name}</span>
@@ -34,10 +33,12 @@ export function DigestTabs({ configs, activeId, onSelect }: DigestTabsProps) {
       })}
       <button
         onClick={() => router.push("/wizard")}
-        className="flex items-center px-3 py-2.5 text-sm text-text-muted hover:text-primary border-b-[3px] border-transparent -mb-px transition-all whitespace-nowrap"
-        title="Novo digest"
+        className="flex items-center px-3 py-2 text-[14px] text-text-muted hover:text-primary rounded-full hover:bg-surface transition-all duration-200 whitespace-nowrap"
       >
-        + Novo
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="mr-1">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+        Novo
       </button>
     </div>
   );
