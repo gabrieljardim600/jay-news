@@ -100,6 +100,7 @@ export interface Article {
   source_name: string;
   source_url: string;
   summary: string;
+  key_quote: string | null;
   full_content: string | null;
   relevance_score: number;
   is_highlight: boolean;
@@ -123,6 +124,7 @@ export interface ProcessedArticle {
   source_name: string;
   source_url: string;
   summary: string;
+  key_quote: string | null;
   full_content: string | null;
   topic_id: string | null;
   alert_id: string | null;

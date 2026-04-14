@@ -187,7 +187,7 @@ export async function runDigestPipeline(
       const articleRows = processed.map((a) => ({
         digest_id: digestId, topic_id: a.topic_id, alert_id: a.alert_id,
         title: a.title, source_name: a.source_name, source_url: a.source_url,
-        summary: a.summary, full_content: a.full_content,
+        summary: a.summary, key_quote: a.key_quote, full_content: a.full_content,
         relevance_score: a.relevance_score, is_highlight: a.is_highlight,
         image_url: a.image_url, published_at: a.published_at,
       }));
@@ -384,6 +384,7 @@ export async function runDigestPipeline(
       source_name: a.source_name,
       source_url: a.source_url,
       summary: a.summary,
+      key_quote: a.key_quote,
       full_content: a.full_content,
       relevance_score: a.relevance_score,
       is_highlight: a.is_highlight,

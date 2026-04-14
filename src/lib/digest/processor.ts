@@ -1,5 +1,12 @@
 import { getAnthropicClient } from "@/lib/anthropic/client";
-import { buildBatchPrompt, buildDaySummaryPrompt } from "@/lib/anthropic/prompts";
+import {
+  buildBatchSystemPrompt,
+  buildBatchUserMessage,
+  buildDaySummarySystemPrompt,
+  buildDaySummaryUserMessage,
+  buildHighlightsSystemPrompt,
+  buildHighlightsUserMessage,
+} from "@/lib/anthropic/prompts";
 import type { RawArticle, RssSource, Topic, ProcessedArticle } from "@/types";
 
 const BATCH_SIZE = 10;
@@ -7,28 +14,40 @@ const BATCH_SIZE = 10;
 interface BatchResult {
   index: number;
   summary: string;
+  key_quote: string | null;
   topic_id: string | null;
   relevance_score: number;
 }
 
-async function processBatch(articles: RawArticle[], topics: Topic[], language: string, style: string): Promise<BatchResult[]> {
+async function processBatch(
+  articles: RawArticle[],
+  topics: Topic[],
+  language: string,
+  style: string
+): Promise<BatchResult[]> {
   const client = getAnthropicClient();
-  const prompt = buildBatchPrompt(articles, topics, language, style);
 
-  const maxTokens = style === "complete" ? 8192 : 4096;
+  const maxTokens = style === "complete" ? 12000 : 6000;
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: maxTokens,
-    messages: [{ role: "user", content: prompt }],
+    system: [
+      {
+        type: "text",
+        text: buildBatchSystemPrompt(),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: buildBatchUserMessage(articles, topics, language, style) }],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(jsonText);
   } catch {
-    // Try to extract JSON from markdown code blocks
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       try {
         return JSON.parse(jsonMatch[0]);
@@ -36,12 +55,54 @@ async function processBatch(articles: RawArticle[], topics: Topic[], language: s
         // fall through
       }
     }
-    console.error("Failed to parse Claude response:", text.slice(0, 500));
+    console.error("Failed to parse batch response:", text.slice(0, 500));
     return [];
   }
 }
 
-export async function processArticles(rawArticles: RawArticle[], topics: Topic[], language: string, style: string, sources?: RssSource[]): Promise<ProcessedArticle[]> {
+async function selectHighlights(articles: ProcessedArticle[]): Promise<number[]> {
+  if (articles.length <= 3) return articles.map((_, i) => i);
+
+  const client = getAnthropicClient();
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 64,
+      system: [
+        {
+          type: "text",
+          text: buildHighlightsSystemPrompt(),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildHighlightsUserMessage(articles) }],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
+    const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const indices: number[] = JSON.parse(jsonText);
+
+    // Validate all indices are in range
+    const valid = indices.filter((i) => typeof i === "number" && i >= 0 && i < articles.length);
+    if (valid.length === 3) return valid;
+  } catch (err) {
+    console.error("Highlight selection failed, falling back to top-3 by score:", err);
+  }
+
+  // Fallback: top 3 by relevance score
+  return [...articles.keys()]
+    .sort((a, b) => articles[b].relevance_score - articles[a].relevance_score)
+    .slice(0, 3);
+}
+
+export async function processArticles(
+  rawArticles: RawArticle[],
+  topics: Topic[],
+  language: string,
+  style: string,
+  sources?: RssSource[]
+): Promise<ProcessedArticle[]> {
   const processed: ProcessedArticle[] = [];
 
   for (let i = 0; i < rawArticles.length; i += BATCH_SIZE) {
@@ -69,6 +130,7 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
         source_name: raw.source_name,
         source_url: raw.url,
         summary: result.summary,
+        key_quote: result.key_quote || null,
         full_content: raw.full_content || null,
         topic_id: result.topic_id,
         alert_id: null,
@@ -80,7 +142,7 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
     }
   }
 
-  // Apply weight boost from source config, then re-sort
+  // Apply source weight boost, then re-sort
   if (sources && sources.length > 0) {
     const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
     for (const article of processed) {
@@ -92,8 +154,11 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
   }
 
   processed.sort((a, b) => b.relevance_score - a.relevance_score);
-  for (let i = 0; i < Math.min(3, processed.length); i++) {
-    processed[i].is_highlight = true;
+
+  // Use Opus to select highlights with editorial judgment
+  const highlightIndices = await selectHighlights(processed);
+  for (const idx of highlightIndices) {
+    processed[idx].is_highlight = true;
   }
 
   return processed;
@@ -101,13 +166,19 @@ export async function processArticles(rawArticles: RawArticle[], topics: Topic[]
 
 export async function generateDaySummary(summaries: string[], language: string): Promise<string> {
   const client = getAnthropicClient();
-  const prompt = buildDaySummaryPrompt(summaries, language);
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 500,
-    messages: [{ role: "user", content: prompt }],
+    model: "claude-opus-4-6",
+    max_tokens: 600,
+    system: [
+      {
+        type: "text",
+        text: buildDaySummarySystemPrompt(),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: buildDaySummaryUserMessage(summaries, language) }],
   });
 
-  return response.content[0].type === "text" ? response.content[0].text : "";
+  return response.content[0].type === "text" ? response.content[0].text.trim() : "";
 }
