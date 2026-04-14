@@ -27,6 +27,7 @@ export interface SourceTestResult {
   status: "success" | "error";
   feed_name?: string;
   total_articles?: number;
+  fetch_method?: "rss" | "tavily" | "scraper";
   sample_articles?: { title: string; published_at: string | null; url: string }[];
   error_code?: string;
   error_message?: string;
@@ -49,6 +50,7 @@ export interface RssSource {
   digest_config_id: string;
   name: string;
   url: string;
+  source_type: "rss" | "web";
   topic_id: string | null;
   weight: number;
   is_active: boolean;

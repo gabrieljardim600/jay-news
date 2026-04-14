@@ -83,6 +83,9 @@ export function StepReview({
                   {source.testResult?.status === "success" ? "OK" : "?"}
                 </Badge>
                 <span className="text-sm truncate">{source.name}</span>
+                {source.source_type === "web" && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-accent/10 text-accent font-medium shrink-0">WEB</span>
+                )}
                 {source.interest && (
                   <span className="text-xs text-text-muted shrink-0">({source.interest})</span>
                 )}

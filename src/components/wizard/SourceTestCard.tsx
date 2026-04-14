@@ -27,6 +27,11 @@ export function SourceTestCard({ result }: SourceTestCardProps) {
         <Badge className="bg-success/20 text-success">Fonte valida</Badge>
         <span className="font-medium text-sm">{result.feed_name}</span>
         <span className="text-xs text-text-muted">{result.total_articles} artigos</span>
+        {result.fetch_method && result.fetch_method !== "rss" && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">
+            via {result.fetch_method === "tavily" ? "Tavily" : "Scraper"}
+          </span>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         {result.sample_articles?.map((article, i) => (

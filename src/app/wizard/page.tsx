@@ -86,6 +86,7 @@ export default function WizardPage() {
           body: JSON.stringify({
             name: source.name,
             url: source.url,
+            source_type: source.source_type || "rss",
             weight: source.weight,
             topic_id: source.interest ? topicMap[source.interest] || null : null,
             digest_config_id: configId,

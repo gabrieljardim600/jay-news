@@ -24,7 +24,7 @@ export function SourcesList({ sources, topics, onRefresh, configId }: SourcesLis
   const getTopicName = (topicId: string | null) =>
     topics.find((t) => t.id === topicId)?.name || "—";
 
-  async function handleSave(data: { name: string; url: string; topic_id: string | null; weight: number }) {
+  async function handleSave(data: { name: string; url: string; source_type: "rss" | "web"; topic_id: string | null; weight: number }) {
     setLoading(true);
     try {
       if (editing) {
@@ -82,7 +82,7 @@ export function SourcesList({ sources, topics, onRefresh, configId }: SourcesLis
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Fontes RSS</h2>
+        <h2 className="text-lg font-semibold">Fontes</h2>
         <Button
           size="sm"
           onClick={() => {
@@ -107,7 +107,12 @@ export function SourcesList({ sources, topics, onRefresh, configId }: SourcesLis
             className="flex items-center justify-between p-3 rounded-md bg-surface"
           >
             <div className="flex flex-col gap-0.5">
-              <span className="font-medium">{source.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{source.name}</span>
+                {source.source_type === "web" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">WEB</span>
+                )}
+              </div>
               <span className="text-xs text-text-muted">{getTopicName(source.topic_id)}</span>
               <WeightStars value={source.weight ?? 3} onChange={() => {}} readOnly size="sm" />
             </div>

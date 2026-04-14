@@ -12,6 +12,7 @@ import type { SourceTestResult } from "@/types";
 export interface WizardSource {
   name: string;
   url: string;
+  source_type: "rss" | "web";
   weight: number;
   interest: string | null;
   testResult: SourceTestResult | null;
@@ -25,6 +26,7 @@ interface SourceAdderProps {
 function SourceAdder({ interest, onAdd }: SourceAdderProps) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
+  const [sourceType, setSourceType] = useState<"rss" | "web">("rss");
   const [weight, setWeight] = useState(3);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<SourceTestResult | null>(null);
@@ -38,7 +40,7 @@ function SourceAdder({ interest, onAdd }: SourceAdderProps) {
       const res = await fetch("/api/sources/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: url.trim(), source_type: sourceType }),
       });
       const result: SourceTestResult = await res.json();
       setTestResult(result);
@@ -51,9 +53,10 @@ function SourceAdder({ interest, onAdd }: SourceAdderProps) {
   }
 
   function handleConfirm() {
-    onAdd({ name: name.trim(), url: url.trim(), weight, interest, testResult });
+    onAdd({ name: name.trim(), url: url.trim(), source_type: sourceType, weight, interest, testResult });
     setUrl("");
     setName("");
+    setSourceType("rss");
     setWeight(3);
     setTestResult(null);
     setShowForm(false);
@@ -69,12 +72,36 @@ function SourceAdder({ interest, onAdd }: SourceAdderProps) {
 
   return (
     <div className="mt-2 p-3 bg-surface rounded-md border border-border">
+      <div className="flex gap-1 p-0.5 rounded-md bg-background border border-border mb-3">
+        <button
+          type="button"
+          onClick={() => { setSourceType("rss"); setTestResult(null); }}
+          className={`flex-1 py-1 px-2 text-xs rounded font-medium transition-colors ${
+            sourceType === "rss"
+              ? "bg-primary text-white"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          RSS Feed
+        </button>
+        <button
+          type="button"
+          onClick={() => { setSourceType("web"); setTestResult(null); }}
+          className={`flex-1 py-1 px-2 text-xs rounded font-medium transition-colors ${
+            sourceType === "web"
+              ? "bg-primary text-white"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          Website
+        </button>
+      </div>
       <div className="flex gap-2 items-end mb-2">
         <Input
-          label="URL do RSS"
+          label={sourceType === "web" ? "Dominio do site" : "URL do RSS"}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/rss"
+          placeholder={sourceType === "web" ? "dnews.com.br" : "https://example.com/rss"}
           className="flex-1"
           onKeyDown={(e) => e.key === "Enter" && handleTest()}
         />
@@ -82,6 +109,11 @@ function SourceAdder({ interest, onAdd }: SourceAdderProps) {
           Testar
         </Button>
       </div>
+      {sourceType === "web" && (
+        <p className="text-xs text-text-muted mb-2">
+          Busca avancada via Tavily — funciona com sites sem RSS
+        </p>
+      )}
 
       {testResult && <SourceTestCard result={testResult} />}
 
@@ -91,7 +123,7 @@ function SourceAdder({ interest, onAdd }: SourceAdderProps) {
             label="Nome da fonte"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: TechCrunch"
+            placeholder={sourceType === "web" ? "Ex: Dnews" : "Ex: TechCrunch"}
           />
           <div className="flex items-center justify-between">
             <label className="text-sm text-text-secondary font-medium">Peso (influencia na selecao)</label>
@@ -140,6 +172,7 @@ export function StepSources({ interests, sources, onSourcesChange }: StepSources
     addSource({
       name: suggestion.name,
       url: suggestion.url,
+      source_type: "rss",
       weight: 3,
       interest: suggestion.topic_name,
       testResult: null,
@@ -157,7 +190,7 @@ export function StepSources({ interests, sources, onSourcesChange }: StepSources
       <div>
         <h2 className="text-xl font-bold mb-1">Adicione suas fontes</h2>
         <p className="text-text-secondary text-sm">
-          Adicione feeds RSS por interesse. Teste antes de confirmar. Fontes sem interesse ficam em &quot;Fontes gerais&quot;.
+          Adicione feeds RSS ou websites por interesse. Teste antes de confirmar. Fontes sem interesse ficam em &quot;Fontes gerais&quot;.
         </p>
       </div>
 

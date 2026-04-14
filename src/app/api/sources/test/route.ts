@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { isValidRssUrl } from "@/lib/sources/validate-url";
+import { isValidRssUrl, isValidWebDomain, extractDomain } from "@/lib/sources/validate-url";
+import { searchTavily } from "@/lib/sources/search";
+import { scrapeWebSource } from "@/lib/sources/scraper";
 import Parser from "rss-parser";
 
 const parser = new Parser({
@@ -13,8 +15,78 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { url } = await request.json();
+  const { url, source_type } = await request.json();
 
+  if (source_type === "web") {
+    return testWebSource(url);
+  }
+  return testRssSource(url);
+}
+
+async function testWebSource(domain: string) {
+  if (!domain || !isValidWebDomain(domain)) {
+    return NextResponse.json({
+      status: "error",
+      error_code: "INVALID_URL",
+      error_message: "Dominio invalido",
+    });
+  }
+
+  const cleanDomain = extractDomain(domain);
+
+  try {
+    const articles = await searchTavily(
+      "noticias recentes",
+      3,
+      [cleanDomain],
+      "advanced"
+    );
+
+    if (articles.length > 0) {
+      return NextResponse.json({
+        status: "success",
+        feed_name: cleanDomain,
+        total_articles: articles.length,
+        fetch_method: "tavily",
+        sample_articles: articles.slice(0, 2).map((a) => ({
+          title: a.title,
+          published_at: a.published_at || null,
+          url: a.url,
+        })),
+      });
+    }
+
+    // Fallback: try Jina Reader + direct fetch
+    const scraped = await scrapeWebSource(cleanDomain, cleanDomain);
+    if (scraped.length > 0) {
+      return NextResponse.json({
+        status: "success",
+        feed_name: cleanDomain,
+        total_articles: scraped.length,
+        fetch_method: "scraper",
+        sample_articles: scraped.slice(0, 2).map((a) => ({
+          title: a.title,
+          published_at: a.published_at || null,
+          url: a.url,
+        })),
+      });
+    }
+
+    return NextResponse.json({
+      status: "error",
+      error_code: "NO_RESULTS",
+      error_message: `Nenhum resultado encontrado para ${cleanDomain} — o site pode nao estar indexado ou acessivel`,
+    });
+  } catch {
+    return NextResponse.json({
+      status: "error",
+      error_code: "SEARCH_FAILED",
+      error_message: "Erro ao buscar noticias do dominio",
+    });
+  }
+}
+
+async function testRssSource(url: string) {
   if (!url || !isValidRssUrl(url)) {
     return NextResponse.json({
       status: "error",

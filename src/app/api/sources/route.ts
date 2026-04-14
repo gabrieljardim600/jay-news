@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { isValidRssUrl } from "@/lib/sources/validate-url";
+import { isValidRssUrl, isValidWebDomain, extractDomain } from "@/lib/sources/validate-url";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -32,9 +32,17 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
+  const sourceType = body.source_type || "rss";
 
-  if (!body.url || !isValidRssUrl(body.url)) {
-    return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
+  if (sourceType === "web") {
+    if (!body.url || !isValidWebDomain(body.url)) {
+      return NextResponse.json({ error: "Invalid domain" }, { status: 400 });
+    }
+    body.url = extractDomain(body.url);
+  } else {
+    if (!body.url || !isValidRssUrl(body.url)) {
+      return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
+    }
   }
 
   const { data, error } = await supabase
@@ -42,6 +50,7 @@ export async function POST(request: Request) {
     .insert({
       ...body,
       user_id: user.id,
+      source_type: sourceType,
       weight: body.weight ?? 3,
     })
     .select()
@@ -59,8 +68,15 @@ export async function PUT(request: Request) {
   const body = await request.json();
   const { id, ...updates } = body;
 
-  if (updates.url && !isValidRssUrl(updates.url)) {
-    return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
+  if (updates.url) {
+    const isWeb = updates.source_type === "web";
+    if (isWeb && !isValidWebDomain(updates.url)) {
+      return NextResponse.json({ error: "Invalid domain" }, { status: 400 });
+    }
+    if (!isWeb && !isValidRssUrl(updates.url)) {
+      return NextResponse.json({ error: "Invalid RSS URL" }, { status: 400 });
+    }
+    if (isWeb) updates.url = extractDomain(updates.url);
   }
 
   const { data, error } = await supabase

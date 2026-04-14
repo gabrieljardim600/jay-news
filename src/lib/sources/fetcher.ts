@@ -1,5 +1,6 @@
 import { fetchAllRssFeeds } from "@/lib/sources/rss";
 import { searchAllTopics } from "@/lib/sources/search";
+import { scrapeWebSource } from "@/lib/sources/scraper";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RawArticle, Topic, RssSource, Alert } from "@/types";
 
@@ -9,14 +10,32 @@ export async function fetchRawArticles(
   alerts: Alert[],
   language: string
 ): Promise<RawArticle[]> {
-  const rssFeeds = sources.map((s) => ({ url: s.url, name: s.name }));
+  const rssSources = sources.filter((s) => s.source_type !== "web");
+  const webSources = sources.filter((s) => s.source_type === "web");
   const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
+
+  const rssFeeds = rssSources.map((s) => ({ url: s.url, name: s.name }));
 
   const topicQueries = topics.flatMap((t) => {
     const maxResults = t.priority === "high" ? 8 : t.priority === "medium" ? 5 : 3;
     const topKeywords = t.keywords.slice(0, 3).join(" ");
     const lang = language === "pt-BR" ? "Brasil noticias" : "news";
     return [{ query: `${topKeywords} ${lang}`, maxResults }];
+  });
+
+  // Web sources: Tavily advanced search per domain, using linked topic keywords or source name
+  const webQueries = webSources.flatMap((s) => {
+    const linkedTopic = topics.find((t) => t.id === s.topic_id);
+    const keywords = linkedTopic ? linkedTopic.keywords.slice(0, 3).join(" ") : s.name;
+    const lang = language === "pt-BR" ? "noticias" : "news";
+    const maxResults = s.weight >= 4 ? 8 : s.weight >= 2 ? 5 : 3;
+    const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    return [{
+      query: `${keywords} ${lang}`,
+      maxResults,
+      includeDomains: [domain],
+      searchDepth: "advanced" as const,
+    }];
   });
 
   const theNewsQueries = [
@@ -29,8 +48,31 @@ export async function fetchRawArticles(
 
   const [rssArticles, searchArticles] = await Promise.all([
     fetchAllRssFeeds(rssFeeds),
-    searchAllTopics([...theNewsQueries, ...topicQueries, ...alertQueries]),
+    searchAllTopics([...theNewsQueries, ...topicQueries, ...webQueries, ...alertQueries]),
   ]);
+
+  // Fallback: for web sources that Tavily didn't find results for, try scraping
+  const tavilyCoveredDomains = new Set(
+    searchArticles.map((a) => {
+      try { return new URL(a.url).hostname.replace("www.", ""); } catch { return ""; }
+    })
+  );
+
+  const uncoveredWebSources = webSources.filter((s) => {
+    const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    return !tavilyCoveredDomains.has(domain) && !tavilyCoveredDomains.has(`www.${domain}`);
+  });
+
+  let scraperArticles: RawArticle[] = [];
+  if (uncoveredWebSources.length > 0) {
+    const scrapeResults = await Promise.allSettled(
+      uncoveredWebSources.map((s) => {
+        const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        return scrapeWebSource(domain, s.name);
+      })
+    );
+    scraperArticles = scrapeResults.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+  }
 
   // Cap RSS per-source by weight (weight * 2, default cap 6)
   const cappedRss = Object.values(
@@ -43,7 +85,7 @@ export async function fetchRawArticles(
     }, {})
   ).flat();
 
-  return [...searchArticles, ...cappedRss];
+  return [...searchArticles, ...scraperArticles, ...cappedRss];
 }
 
 export async function fetchAndStore(
