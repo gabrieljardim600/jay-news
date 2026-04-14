@@ -1,9 +1,12 @@
+import { getAnthropicClient } from "@/lib/anthropic/client";
 import type { RawArticle } from "@/types";
 
 /**
  * Fallback chain for extracting articles from web sources:
  * 1. Jina Reader (converts any URL to clean markdown)
  * 2. Direct fetch + HTML extraction
+ *
+ * Content is then parsed by AI (Haiku) to extract structured articles.
  */
 
 const JINA_TIMEOUT = 15000;
@@ -55,7 +58,6 @@ export async function scrapeWithFetch(url: string): Promise<string | null> {
 }
 
 function extractTextFromHtml(html: string): string | null {
-  // Strip script, style, nav, header, footer tags and their content
   let text = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -63,9 +65,7 @@ function extractTextFromHtml(html: string): string | null {
     .replace(/<header[\s\S]*?<\/header>/gi, "")
     .replace(/<footer[\s\S]*?<\/footer>/gi, "");
 
-  // Strip remaining HTML tags
   text = text.replace(/<[^>]+>/g, " ");
-  // Decode common HTML entities
   text = text
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -73,54 +73,64 @@ function extractTextFromHtml(html: string): string | null {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ");
-  // Collapse whitespace
   text = text.replace(/\s+/g, " ").trim();
 
   return text.length > 200 ? text : null;
 }
 
-// --- Extract article-like blocks from markdown ---
+// --- AI-powered article extraction ---
 
-interface ExtractedArticle {
+interface AIExtractedArticle {
   title: string;
   url: string;
-  snippet: string;
+  summary: string;
 }
 
-export function extractArticlesFromMarkdown(markdown: string, sourceDomain: string): ExtractedArticle[] {
-  const articles: ExtractedArticle[] = [];
-  const seen = new Set<string>();
+async function extractArticlesWithAI(
+  content: string,
+  sourceDomain: string,
+  sourceUrl: string
+): Promise<AIExtractedArticle[]> {
+  try {
+    const client = getAnthropicClient();
+    const truncated = content.slice(0, 6000);
 
-  // Pattern 1: Markdown headings followed by content
-  // ## Title or ### Title, possibly with a link
-  const headingPattern = /^#{1,3}\s+\[?([^\]\n]+)\]?\(?([^)\s]*)\)?/gm;
-  let match: RegExpExecArray | null;
-  while ((match = headingPattern.exec(markdown)) !== null) {
-    const title = match[1].trim();
-    const url = match[2]?.trim() || "";
-    if (title.length > 10 && !seen.has(title)) {
-      seen.add(title);
-      // Grab next 200 chars as snippet
-      const afterMatch = markdown.slice(match.index + match[0].length, match.index + match[0].length + 300).trim();
-      const snippet = afterMatch.replace(/^[\s\n#-]+/, "").slice(0, 200);
-      articles.push({ title, url, snippet });
-    }
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2048,
+      messages: [{
+        role: "user",
+        content: `You are a news article extractor. Analyze the following webpage content from ${sourceDomain} and extract individual news articles or stories.
+
+For each article found, return:
+- "title": the headline (clean, no markdown)
+- "url": the full article URL if available, otherwise "${sourceUrl}"
+- "summary": 1-2 sentence summary of the article content
+
+Rules:
+- Extract only NEWS articles, not navigation items, ads, or site descriptions
+- Maximum 10 articles
+- If the content is a single article page (not a homepage/feed), extract that one article
+- URLs must be absolute (start with http). If you find relative URLs, prepend "${sourceUrl}"
+- Write summaries in the same language as the content
+
+Return ONLY a valid JSON array, no markdown, no explanation. If no articles found, return [].
+
+Content:
+${truncated}`,
+      }],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const articles = JSON.parse(jsonMatch[0]) as AIExtractedArticle[];
+    return articles.filter((a) => a.title && a.title.length > 5).slice(0, 10);
+  } catch (error) {
+    console.error("AI extraction failed:", error);
+    return [];
   }
-
-  // Pattern 2: Markdown links with descriptive text [Title](url)
-  const linkPattern = /\[([^\]]{15,})\]\((https?:\/\/[^)]+)\)/g;
-  while ((match = linkPattern.exec(markdown)) !== null) {
-    const title = match[1].trim();
-    const url = match[2].trim();
-    if (!seen.has(title) && !title.startsWith("http")) {
-      seen.add(title);
-      const afterMatch = markdown.slice(match.index + match[0].length, match.index + match[0].length + 300).trim();
-      const snippet = afterMatch.replace(/^[\s\n#-]+/, "").slice(0, 200);
-      articles.push({ title, url, snippet });
-    }
-  }
-
-  return articles.slice(0, 15);
 }
 
 // --- Main fallback scraper ---
@@ -130,39 +140,34 @@ export async function scrapeWebSource(
   sourceName: string
 ): Promise<RawArticle[]> {
   const url = `https://${domain}`;
+  const name = sourceName || domain;
 
-  // Try Jina Reader first
+  // Try Jina Reader first (best quality — returns clean markdown)
   const jinaContent = await scrapeWithJina(url);
   if (jinaContent) {
-    const extracted = extractArticlesFromMarkdown(jinaContent, domain);
-    if (extracted.length > 0) {
-      return extracted.map((a) => ({
+    const articles = await extractArticlesWithAI(jinaContent, domain, url);
+    if (articles.length > 0) {
+      return articles.map((a) => ({
         title: a.title,
-        url: a.url.startsWith("http") ? a.url : `${url}${a.url.startsWith("/") ? "" : "/"}${a.url}`,
-        content: a.snippet,
-        source_name: sourceName || domain,
+        url: a.url.startsWith("http") ? a.url : url,
+        content: a.summary,
+        source_name: name,
       }));
     }
-
-    // If no structured articles found, return the whole page as one "article"
-    // The AI processor will handle summarization
-    return [{
-      title: `${sourceName || domain} — conteudo de hoje`,
-      url,
-      content: jinaContent.slice(0, 3000),
-      source_name: sourceName || domain,
-    }];
   }
 
-  // Fallback: direct fetch
+  // Fallback: direct fetch + AI extraction
   const htmlContent = await scrapeWithFetch(url);
   if (htmlContent) {
-    return [{
-      title: `${sourceName || domain} — conteudo de hoje`,
-      url,
-      content: htmlContent.slice(0, 3000),
-      source_name: sourceName || domain,
-    }];
+    const articles = await extractArticlesWithAI(htmlContent, domain, url);
+    if (articles.length > 0) {
+      return articles.map((a) => ({
+        title: a.title,
+        url: a.url.startsWith("http") ? a.url : url,
+        content: a.summary,
+        source_name: name,
+      }));
+    }
   }
 
   return [];
