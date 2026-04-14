@@ -85,6 +85,34 @@ export async function initializeDigest(
   return { digestId: digest.id, settings, topics, sources, alerts, exclusions };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Sanitize an ID that should be a UUID or null — guards against model hallucinations. */
+function safeId(id: string | null | undefined, allowedIds?: Set<string>): string | null {
+  if (!id || id === "null" || id === "none" || !UUID_RE.test(id)) return null;
+  if (allowedIds && !allowedIds.has(id)) return null;
+  return id;
+}
+
+/**
+ * Insert article rows with graceful fallback: try batch first, then row-by-row on failure.
+ * This prevents one invalid row from silently discarding the entire batch.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function insertArticlesSafe(supabase: any, rows: Record<string, unknown>[]): Promise<void> {
+  const { error } = await supabase.from("articles").insert(rows);
+  if (!error) return;
+
+  console.error("Batch article insert failed, falling back to row-by-row:", error.message);
+  let saved = 0;
+  for (const row of rows) {
+    const { error: rowErr } = await supabase.from("articles").insert(row);
+    if (rowErr) console.error("Row insert failed:", rowErr.message, "title:", row.title);
+    else saved++;
+  }
+  console.log(`Row-by-row fallback: saved ${saved}/${rows.length} articles`);
+}
+
 /**
  * Match a processed article to an alert based on keyword overlap with the alert query.
  * Returns the alert ID if a match is found, null otherwise.
@@ -201,15 +229,22 @@ export async function runDigestPipeline(
         article.alert_id = matchArticleToAlerts(article, alerts);
       }
 
+      // Drop zero-relevance articles
+      const trendsPublishable = processed.filter((a) => a.relevance_score > 0);
+
       await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
-      const articleRows = processed.map((a) => ({
-        digest_id: digestId, topic_id: a.topic_id, alert_id: a.alert_id,
+      const trendsTopicIds = new Set(trendsTopics.map((t) => t.id));
+      const alertIds = new Set(alerts.map((a) => a.id));
+      const articleRows = trendsPublishable.map((a) => ({
+        digest_id: digestId,
+        topic_id: safeId(a.topic_id, trendsTopicIds),
+        alert_id: safeId(a.alert_id, alertIds),
         title: a.title, source_name: a.source_name, source_url: a.source_url,
         summary: a.summary, key_quote: a.key_quote, full_content: a.full_content,
         relevance_score: a.relevance_score, is_highlight: a.is_highlight,
         image_url: a.image_url, published_at: a.published_at,
       }));
-      await supabase.from("articles").insert(articleRows);
+      await insertArticlesSafe(supabase, articleRows);
 
       await updateProgress(88, "Gerando briefing do tema...", { source_results: sourceResults });
       const daySummary = await generateTrendsBriefing(processed.map((a) => a.summary), topic, settings.language);
@@ -397,12 +432,17 @@ export async function runDigestPipeline(
       article.alert_id = matchArticleToAlerts(article, alerts);
     }
 
+    // Drop articles with zero relevance — these are empty/cookie-only pages that slipped through
+    const publishable = processed.filter((a) => a.relevance_score > 0);
+
     await updateProgress(80, "Salvando artigos...", { source_results: sourceResults });
 
-    const articleRows = processed.map((a) => ({
+    const topicIds = new Set(topics.map((t) => t.id));
+    const alertIds = new Set(alerts.map((a) => a.id));
+    const articleRows = publishable.map((a) => ({
       digest_id: digestId,
-      topic_id: a.topic_id,
-      alert_id: a.alert_id,
+      topic_id: safeId(a.topic_id, topicIds),
+      alert_id: safeId(a.alert_id, alertIds),
       title: a.title,
       source_name: a.source_name,
       source_url: a.source_url,
@@ -415,17 +455,17 @@ export async function runDigestPipeline(
       published_at: a.published_at,
     }));
 
-    await supabase.from("articles").insert(articleRows);
+    await insertArticlesSafe(supabase, articleRows);
 
     await updateProgress(85, "Gerando resumo do dia...", { source_results: sourceResults });
 
-    const daySummary = await generateDaySummary(processed.map((a) => a.summary), settings.language);
+    const daySummary = await generateDaySummary(publishable.map((a) => a.summary), settings.language);
     const trends = await computeTrends(digestConfigId ?? "", digestId, supabase);
 
     const metadata: DigestMetadata = {
-      total_articles: processed.length,
-      sources_count: new Set(processed.map((a) => a.source_name)).size,
-      topics_count: new Set(processed.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
+      total_articles: publishable.length,
+      sources_count: new Set(publishable.map((a) => a.source_name)).size,
+      topics_count: new Set(publishable.filter((a) => a.topic_id).map((a) => a.topic_id)).size,
       ...(trends.length > 0 ? { trends } : {}),
       source_results: sourceResults,
     };
