@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { filterArticles } from "@/lib/digest/filter";
+import { filterArticles, filterByTopicRelevance } from "@/lib/digest/filter";
 import { enrichArticles } from "@/lib/sources/enrich";
 import { cleanArticlesContent } from "@/lib/sources/content-cleaner";
 import { processArticles, generateDaySummary, generateTrendsSearchAngles, generateTrendsBriefing } from "@/lib/digest/processor";
@@ -186,7 +186,10 @@ export async function runDigestPipeline(
 
       await updateProgress(45, `${allRaw.length} artigos encontrados. Filtrando...`, { source_results: sourceResults });
 
-      const filtered = filterArticles(allRaw, exclusions).slice(0, Math.max(settings.max_articles, 30));
+      // Drop off-topic results (Tavily returns generic banking/global news on vague queries)
+      const onTopic = filterByTopicRelevance(allRaw, topic, settings.trend_keywords ?? []);
+      console.log(`Trends topic relevance filter: ${allRaw.length} → ${onTopic.length}`);
+      const filtered = filterArticles(onTopic, exclusions).slice(0, Math.max(settings.max_articles, 30));
 
       if (filtered.length === 0) {
         await supabase.from("digests").update({

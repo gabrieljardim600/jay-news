@@ -12,7 +12,7 @@ import {
 } from "@/lib/anthropic/prompts";
 import type { RawArticle, RssSource, Topic, ProcessedArticle } from "@/types";
 
-type SearchAngle = { query: string; maxResults: number; searchDepth: "basic" | "advanced" };
+type SearchAngle = { query: string; maxResults: number; searchDepth: "basic" | "advanced"; includeDomains?: string[] };
 
 const BATCH_SIZE = 10;
 const MAX_PARALLEL_BATCHES = 3;
@@ -198,13 +198,33 @@ export async function generateDaySummary(summaries: string[], language: string):
   return response.content[0].type === "text" ? response.content[0].text.trim() : "";
 }
 
+// Top Brazilian news outlets — used as domain filter for pt-BR trends to avoid global noise
+const BR_NEWS_DOMAINS = [
+  "valor.globo.com", "folha.uol.com.br", "oglobo.globo.com", "estadao.com.br",
+  "g1.globo.com", "poder360.com.br", "uol.com.br", "cnnbrasil.com.br",
+  "infomoney.com.br", "bloomberglinea.com.br", "brazilJournal.com", "brazil-journal.com",
+  "exame.com", "istoe.com.br", "metropoles.com", "conjur.com.br",
+  "gazetadopovo.com.br", "jota.info", "band.uol.com.br", "terra.com.br",
+];
+
 export async function generateTrendsSearchAngles(
   topic: string,
   keywords: string[],
   language: string
 ): Promise<SearchAngle[]> {
   const client = getAnthropicClient();
+  const isPt = language === "pt-BR";
 
+  // Ensure the topic + keywords literally appear in every generated query
+  const enforceTopic = (q: string): string => {
+    const lower = q.toLowerCase();
+    const topicLower = topic.toLowerCase();
+    if (lower.includes(topicLower)) return q;
+    // Prepend the topic to keep entity grounding
+    return `${topic} ${q}`.trim();
+  };
+
+  let queries: string[] = [];
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -214,27 +234,46 @@ export async function generateTrendsSearchAngles(
 
     const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
     const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const queries: string[] = JSON.parse(jsonText);
-
-    return queries.map((query, i) => ({
-      query,
-      maxResults: i < 3 ? 8 : 5,
-      searchDepth: i < 4 ? ("advanced" as const) : ("basic" as const),
-    }));
+    queries = JSON.parse(jsonText);
   } catch (err) {
     console.error("Failed to generate search angles, using fallback:", err);
-    // Fallback to hardcoded angles
-    const extra = keywords.join(" ");
-    const lang = language === "pt-BR" ? "PT" : "EN";
-    return [
-      { query: `${topic} ${extra} últimas notícias`.trim(), maxResults: 8, searchDepth: "advanced" },
-      { query: `${topic} análise tendências`, maxResults: 6, searchDepth: "advanced" },
-      { query: `${topic} impacto novidades`, maxResults: 6, searchDepth: "advanced" },
-      { query: `${topic} especialistas perspectivas`, maxResults: 5, searchDepth: "advanced" },
-      { query: `${topic} dados estatísticas relatório`, maxResults: 5, searchDepth: "basic" },
-      ...(lang === "PT" ? [{ query: `${topic} latest news ${extra}`.trim(), maxResults: 6, searchDepth: "advanced" as const }] : []),
-    ];
+    const kwSuffix = keywords.length > 0 ? ` ${keywords.slice(0, 3).join(" ")}` : "";
+    queries = isPt
+      ? [
+          `${topic}${kwSuffix} últimas notícias Brasil`,
+          `${topic} investigação`,
+          `${topic} o que aconteceu`,
+          `${topic} análise impacto`,
+          `${topic} reação mercado`,
+          `${topic} contexto histórico`,
+          `${topic} próximos passos`,
+        ]
+      : [
+          `${topic}${kwSuffix} latest news`,
+          `${topic} investigation`,
+          `${topic} analysis impact`,
+          `${topic} market reaction`,
+          `${topic} background`,
+          `${topic} expert view`,
+          `${topic} next steps`,
+        ];
   }
+
+  queries = queries.map(enforceTopic);
+
+  // Build SearchAngle objects. For pt-BR, first 4 queries get Brazilian domain filter
+  // to prevent Tavily from returning generic global banking/finance results.
+  return queries.map((query, i) => {
+    const angle: SearchAngle = {
+      query,
+      maxResults: i < 3 ? 8 : 5,
+      searchDepth: i < 4 ? "advanced" : "basic",
+    };
+    if (isPt && i < 4) {
+      (angle as SearchAngle & { includeDomains?: string[] }).includeDomains = BR_NEWS_DOMAINS;
+    }
+    return angle;
+  });
 }
 
 export async function generateTrendsBriefing(

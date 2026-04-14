@@ -109,25 +109,30 @@ export function buildHighlightsUserMessage(articles: ProcessedArticle[]): string
 // ─── Trends search angle generation ─────────────────────────────────────────
 
 export function buildTrendsSearchAnglesMessage(topic: string, keywords: string[], language: string): string {
-  const lang = language === "pt-BR" ? "Portuguese (Brazil)" : "English";
-  const kw = keywords.length > 0 ? `\nAdditional keywords: ${keywords.join(", ")}` : "";
+  const isPt = language === "pt-BR";
+  const lang = isPt ? "Brazilian Portuguese" : "English";
+  const kw = keywords.length > 0 ? `\nAdditional keywords / entities: ${keywords.join(", ")}` : "";
+  const geoSuffix = isPt ? " Brasil" : "";
 
-  return `Generate 7 diverse Tavily web search queries to thoroughly cover the topic: "${topic}"${kw}
+  return `Generate 7 highly-targeted Tavily web search queries to thoroughly cover the topic: "${topic}"${kw}
 
-Search language preference: ${lang} (include some English queries for broader coverage)
+CRITICAL RULES:
+- ALL queries must be in ${lang}. No mixing languages.
+- Every query MUST include the core proper noun(s) from the topic VERBATIM (do not translate or paraphrase names like "Vorcaro", "Banco Master", "Petrobras", etc.).
+- ${isPt ? "Add geographic/regional qualifiers where helpful (e.g. Brasil, mercado brasileiro, BCB) to avoid generic global results." : "Stay focused on the specific entity or event — not generic industry terms."}
+- Each query should be specific and entity-grounded — avoid vague industry terms like "banking news" alone.
+- Distinct angles, not rephrasings. Cover:
+  * Latest news / breaking developments
+  * Investigation / regulatory angle (if applicable)
+  * Market / financial impact
+  * Key actors / people involved
+  * Official statements / institutional reactions
+  * Timeline / background
+  * Future outlook / consequences
 
-The queries should cover different angles:
-- Breaking news and latest developments
-- Analysis, trends, and forecasts
-- Expert opinions and reactions
-- Data, statistics, and reports
-- Historical context or comparisons
-- Industry / market implications
-- International / global perspective
+Topic verbatim: "${topic}"${geoSuffix}
 
-Each query should be specific and targeted — avoid vague terms. Tailor vocabulary to the topic domain.
-
-Return ONLY a JSON array of strings (no explanation):
+Return ONLY a JSON array of strings (no explanation, no markdown):
 ["query 1", "query 2", "query 3", "query 4", "query 5", "query 6", "query 7"]`;
 }
 

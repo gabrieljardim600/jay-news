@@ -1,5 +1,46 @@
 import type { RawArticle, Exclusion } from "@/types";
 
+/**
+ * Keep only articles where the topic or any keyword appears in title or content.
+ * Used for trends mode to drop off-topic results Tavily returns on generic queries.
+ * Proper nouns (capitalized multi-word) are matched case-insensitively and whole-word.
+ */
+export function filterByTopicRelevance(
+  articles: RawArticle[],
+  topic: string,
+  keywords: string[]
+): RawArticle[] {
+  // Terms to match: the topic itself + each keyword + significant words from the topic
+  const terms = new Set<string>();
+  const add = (s: string) => {
+    const t = s.trim().toLowerCase();
+    if (t.length >= 3) terms.add(t);
+  };
+  add(topic);
+  for (const k of keywords) add(k);
+  // Also match significant individual words from the topic — drops connectives only
+  const CONNECTIVES = new Set([
+    "sobre", "como", "para", "com", "pela", "pelo", "que", "dos", "das", "do", "da", "de", "e", "em", "no", "na",
+    "about", "with", "from", "the", "and", "of", "in", "on", "to", "for",
+  ]);
+  for (const word of topic.split(/\s+/)) {
+    const clean = word.toLowerCase().replace(/[^\wà-ú]/gi, "");
+    if (clean.length >= 3 && !CONNECTIVES.has(clean)) {
+      terms.add(clean);
+    }
+  }
+
+  if (terms.size === 0) return articles;
+
+  return articles.filter((a) => {
+    const haystack = `${a.title} ${a.content || ""}`.toLowerCase();
+    for (const term of terms) {
+      if (haystack.includes(term)) return true;
+    }
+    return false;
+  });
+}
+
 const STOPWORDS = new Set([
   // PT
   "de","do","da","dos","das","em","no","na","nos","nas","para","por","com",
