@@ -4,6 +4,7 @@ interface TavilyResult {
   title: string;
   url: string;
   content: string;
+  image?: string;
   published_date?: string;
 }
 
@@ -56,6 +57,7 @@ export async function searchTavily(
       url: r.url,
       content: r.content,
       source_name: new URL(r.url).hostname.replace("www.", ""),
+      image_url: r.image || undefined,
       published_at: r.published_date || undefined,
     }));
   } catch (error) {

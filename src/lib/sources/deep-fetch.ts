@@ -16,9 +16,10 @@ interface EditionLink {
 
 interface StoryItem {
   title: string;
-  summary: string;    // Short 2-3 sentence preview
+  summary: string;      // Short 2-3 sentence preview
   full_content: string; // Full story text as written in the newsletter
   url: string | null;
+  image_url: string | null;
 }
 
 // Max concurrent edition fetches
@@ -88,6 +89,7 @@ Extract each individual news story covered in this edition. For each story retur
 - "summary": 2-3 sentence description of what happened (keep original language)
 - "full_content": the COMPLETE original text about this story as written in the newsletter — include all details, context, and quotes (keep original language, do not truncate)
 - "url": the source article URL if mentioned (absolute URL starting with https), otherwise null
+- "image_url": the main editorial image URL for this story if present (must start with https), otherwise null. Skip logos, icons, ads, banners, or email-tracking pixels.
 
 Rules:
 - Only extract actual news stories, not ads, subscribe prompts, or navigation items
@@ -114,6 +116,7 @@ ${content.slice(0, 10000)}`,
         content: s.summary ?? "",
         full_content: s.full_content ?? s.summary ?? "",
         source_name: sourceName,
+        image_url: s.image_url ?? undefined,
         published_at: undefined,
       }));
   } catch {

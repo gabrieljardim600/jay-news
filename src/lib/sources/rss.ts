@@ -18,7 +18,10 @@ export async function fetchRssFeed(url: string, sourceName: string): Promise<Raw
         content: snippet,
         full_content: fullText || snippet || undefined,
         source_name: sourceName,
-        image_url: item.enclosure?.url || undefined,
+        image_url: item.enclosure?.url
+          || (item as Record<string, unknown>)["media:content"]?.["$"]?.url
+          || (item as Record<string, unknown>)["media:thumbnail"]?.["$"]?.url
+          || undefined,
         published_at: item.isoDate || undefined,
       };
     });

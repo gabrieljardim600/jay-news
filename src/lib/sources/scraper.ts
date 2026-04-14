@@ -80,10 +80,21 @@ function extractTextFromHtml(html: string): string | null {
 
 // --- AI-powered article extraction ---
 
+// Noise patterns to skip — ads, logos, icons, trackers, social share images
+const IMAGE_NOISE = /\/(ad|ads|advert|banner|logo|icon|favicon|pixel|tracker|sponsor|promo|widget|social|share|avatar|profile|badge)\b|\.gif$|data:image|1x1|pixel\.png/i;
+
+function extractImagesFromMarkdown(markdown: string): string[] {
+  const matches = [...markdown.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g)];
+  return matches
+    .map((m) => m[1])
+    .filter((url) => !IMAGE_NOISE.test(url));
+}
+
 interface AIExtractedArticle {
   title: string;
   url: string;
   summary: string;
+  image_url?: string | null;
 }
 
 async function extractArticlesWithAI(
@@ -106,6 +117,7 @@ For each article found, return:
 - "title": the headline (clean, no markdown)
 - "url": the full article URL if available, otherwise "${sourceUrl}"
 - "summary": 1-2 sentence summary of the article content
+- "image_url": the main editorial image URL for this article if present (must start with https), otherwise null. Skip logos, icons, ads, banners, avatars, or social sharing images.
 
 Rules:
 - Extract only NEWS articles, not navigation items, ads, or site descriptions
@@ -147,11 +159,14 @@ export async function scrapeWebSource(
   if (jinaContent) {
     const articles = await extractArticlesWithAI(jinaContent, domain, url);
     if (articles.length > 0) {
-      return articles.map((a) => ({
+      // Parse markdown images as fallback pool when AI doesn't return one
+      const markdownImages = extractImagesFromMarkdown(jinaContent);
+      return articles.map((a, i) => ({
         title: a.title,
         url: a.url.startsWith("http") ? a.url : url,
         content: a.summary,
         source_name: name,
+        image_url: a.image_url || markdownImages[i] || markdownImages[0] || undefined,
       }));
     }
   }
@@ -166,6 +181,7 @@ export async function scrapeWebSource(
         url: a.url.startsWith("http") ? a.url : url,
         content: a.summary,
         source_name: name,
+        image_url: a.image_url || undefined,
       }));
     }
   }
