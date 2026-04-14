@@ -127,7 +127,6 @@ export async function generateDigest(userId: string, type: "scheduled" | "on_dem
       );
 
       const rssArticles: RawArticle[] = [];
-      const sourceByName = Object.fromEntries(sources.map((s) => [s.name, s]));
       for (let i = 0; i < rssResults.length; i++) {
         const result = rssResults[i];
         const source = rssSources[i];
