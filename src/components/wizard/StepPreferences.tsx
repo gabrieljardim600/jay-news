@@ -26,6 +26,7 @@ const LANGUAGE_OPTIONS = [
 const STYLE_OPTIONS = [
   { value: "executive", label: "Executivo (2-3 frases)" },
   { value: "detailed", label: "Detalhado (4-5 frases)" },
+  { value: "complete", label: "Completo (materia inteira)" },
 ];
 
 export function StepPreferences({

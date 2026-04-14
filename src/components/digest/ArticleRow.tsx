@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import { relativeDate } from "@/lib/utils/relative-date";
 import type { Article } from "@/types";
 
@@ -11,6 +11,7 @@ interface ArticleRowProps {
 
 export function ArticleRow({ article }: ArticleRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const hasFullContent = article.full_content && article.full_content.length > 0;
 
   return (
     <div className="py-4 border-b border-border last:border-0">
@@ -24,9 +25,11 @@ export function ArticleRow({ article }: ArticleRowProps) {
             <h3 className="text-[15px] font-semibold text-text leading-snug group-hover:text-primary transition-colors">
               {article.title}
             </h3>
-            <p className="text-[13px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">
-              {article.summary}
-            </p>
+            {!expanded && (
+              <p className="text-[13px] text-text-secondary mt-1 line-clamp-2 leading-relaxed">
+                {article.summary}
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-2">
               <span className="text-[11px] font-medium text-text-muted uppercase tracking-wide">
                 {article.source_name}
@@ -37,6 +40,12 @@ export function ArticleRow({ article }: ArticleRowProps) {
                   <span className="text-[11px] text-text-muted">
                     {relativeDate(article.published_at)}
                   </span>
+                </>
+              )}
+              {hasFullContent && !expanded && (
+                <>
+                  <span className="text-text-muted text-[11px]">·</span>
+                  <span className="text-[11px] text-primary font-medium">Ver completo</span>
                 </>
               )}
             </div>
@@ -61,21 +70,28 @@ export function ArticleRow({ article }: ArticleRowProps) {
               <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
             </div>
           )}
-          {article.full_content ? (
-            <div className="text-[14px] text-text-secondary leading-relaxed whitespace-pre-line">
+
+          {/* Summary always shown */}
+          <div className="bg-surface rounded-[10px] p-3 mb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-1">Resumo IA</p>
+            <p className="text-[14px] text-text leading-relaxed">{article.summary}</p>
+          </div>
+
+          {/* Full content when available */}
+          {hasFullContent && (
+            <div className="text-[14px] text-text-secondary leading-relaxed whitespace-pre-line mb-3">
               {article.full_content}
             </div>
-          ) : (
-            <p className="text-[14px] text-text-secondary leading-relaxed">{article.summary}</p>
           )}
+
           <a
             href={article.source_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 mt-3 text-[13px] text-primary font-medium hover:underline"
+            className="inline-flex items-center gap-1.5 text-[13px] text-primary font-medium hover:underline"
           >
-            Ler na fonte
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2h6v6M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <ExternalLink className="w-3.5 h-3.5" />
+            Abrir na fonte
           </a>
         </div>
       )}

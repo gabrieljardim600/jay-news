@@ -2,7 +2,7 @@ export interface UserSettings {
   user_id: string;
   digest_time: string;
   language: string;
-  summary_style: "executive" | "detailed";
+  summary_style: "executive" | "detailed" | "complete";
   max_articles: number;
   created_at: string;
   updated_at: string;
@@ -15,7 +15,7 @@ export interface DigestConfig {
   icon: string;
   color: string;
   language: string;
-  summary_style: "executive" | "detailed";
+  summary_style: "executive" | "detailed" | "complete";
   digest_time: string;
   max_articles: number;
   is_active: boolean;

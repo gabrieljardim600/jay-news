@@ -8,7 +8,9 @@ export function buildBatchPrompt(articles: RawArticle[], topics: Topic[], langua
   }).join("\n\n");
   const styleInstruction = style === "executive"
     ? "Write concise 2-3 sentence summaries focused on key facts and implications."
-    : "Write detailed 4-5 sentence summaries covering context, details, and analysis.";
+    : style === "complete"
+      ? "Write comprehensive summaries that capture the full article content, key details, quotes, data points, and analysis. Include all important information so the reader doesn't need to visit the original source. Aim for 6-10 sentences."
+      : "Write detailed 4-5 sentence summaries covering context, details, and analysis.";
 
   return `You are a news analyst. Process these articles and return a JSON array.
 

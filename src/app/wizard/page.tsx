@@ -8,15 +8,13 @@ import { StepInterests } from "@/components/wizard/StepInterests";
 import { StepSources, type WizardSource } from "@/components/wizard/StepSources";
 import { StepPreferences } from "@/components/wizard/StepPreferences";
 import { StepReview } from "@/components/wizard/StepReview";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
 
 export default function WizardPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [generatedSummary, setGeneratedSummary] = useState<string | null>(null);
-  const [generatedCount, setGeneratedCount] = useState(0);
+  const [done, setDone] = useState(false);
 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("📰");
@@ -79,101 +77,87 @@ export default function WizardPage() {
     return configId;
   }
 
-  async function handleSaveOnly() {
+  async function handleSave() {
     setSaving(true);
-    try { await saveConfig(); router.push("/"); }
-    finally { setSaving(false); }
-  }
-
-  async function handleSaveAndGenerate() {
-    setGenerating(true);
     try {
-      const configId = await saveConfig();
-      const genRes = await fetch("/api/digest/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ digestConfigId: configId }),
-      });
-      const { digestId } = await genRes.json();
-      let attempts = 0;
-      while (attempts < 30) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const check = await fetch(`/api/digest/${digestId}`);
-        const data = await check.json();
-        if (data.status === "completed" || data.status === "failed") {
-          setGeneratedSummary(data.summary || null);
-          setGeneratedCount(data.articles?.length || data.metadata?.total_articles || 0);
-          break;
-        }
-        attempts++;
-      }
-    } finally { setGenerating(false); }
+      await saveConfig();
+      setDone(true);
+    } catch (e) {
+      console.error("Failed to save:", e);
+      setSaving(false);
+    }
   }
 
   const isLastStep = step === 3;
-  const isDone = isLastStep && generatedSummary !== null;
 
   return (
     <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
       {/* Header */}
       <header className="flex items-center gap-3 mb-10">
         <button
-          onClick={() => step > 0 ? setStep(step - 1) : router.push("/")}
+          onClick={() => step > 0 && !done ? setStep(step - 1) : router.push("/")}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-secondary"
         >
           <ArrowLeft className="w-[18px] h-[18px]" />
         </button>
         <div>
           <h1 className="text-[22px] font-bold tracking-tight">Novo Digest</h1>
-          <p className="text-text-muted text-[13px]">Passo {step + 1} de 4</p>
+          {!done && <p className="text-text-muted text-[13px]">Passo {step + 1} de 4</p>}
         </div>
       </header>
 
-      {!isDone && <WizardStepper currentStep={step} onStepClick={setStep} />}
+      {!done && <WizardStepper currentStep={step} onStepClick={setStep} />}
 
       <div className="mb-10">
-        {step === 0 && (
+        {!done && step === 0 && (
           <StepInterests
             name={name} icon={icon} color={color} interests={interests}
             onNameChange={setName} onIconChange={setIcon} onColorChange={setColor} onInterestsChange={setInterests}
           />
         )}
-        {step === 1 && (
+        {!done && step === 1 && (
           <StepSources interests={interests} sources={sources} onSourcesChange={setSources} />
         )}
-        {step === 2 && (
+        {!done && step === 2 && (
           <StepPreferences
             language={language} summaryStyle={summaryStyle} digestTime={digestTime} maxArticles={maxArticles} exclusions={exclusions}
             onLanguageChange={setLanguage} onSummaryStyleChange={setSummaryStyle} onDigestTimeChange={setDigestTime}
             onMaxArticlesChange={setMaxArticles} onExclusionsChange={setExclusions}
           />
         )}
-        {isLastStep && !isDone && (
+        {!done && isLastStep && (
           <StepReview
             name={name} icon={icon} color={color} interests={interests} sources={sources}
             language={language} summaryStyle={summaryStyle} digestTime={digestTime} maxArticles={maxArticles} exclusions={exclusions}
           />
         )}
-        {isDone && (
+
+        {/* Saving state */}
+        {saving && !done && (
+          <div className="max-w-md mx-auto text-center py-12">
+            <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
+            <p className="text-[15px] text-text-secondary">Salvando seu digest...</p>
+          </div>
+        )}
+
+        {/* Done state */}
+        {done && (
           <div className="max-w-md mx-auto text-center py-12">
             <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-success/15 flex items-center justify-center">
               <Check className="w-7 h-7 text-success" />
             </div>
             <h2 className="text-[22px] font-bold tracking-tight mb-2">Digest criado</h2>
-            {generatedCount > 0 && (
-              <p className="text-text-secondary text-[15px] mb-2">{generatedCount} artigos encontrados</p>
-            )}
-            {generatedSummary && (
-              <p className="text-[14px] text-text-muted mb-8 leading-relaxed">{generatedSummary}</p>
-            )}
+            <p className="text-[14px] text-text-muted mb-8 leading-relaxed">
+              Seu digest &quot;{icon} {name}&quot; foi salvo. Gere o primeiro na pagina principal.
+            </p>
             <Button size="lg" onClick={() => router.push("/")} className="rounded-full px-8">
-              Ver meu digest
+              Ir para o feed
             </Button>
           </div>
         )}
       </div>
 
-      {!isDone && (
+      {!done && !saving && (
         <div className="flex justify-end max-w-xl mx-auto gap-3">
           {step < 3 && (
             <Button
@@ -185,14 +169,9 @@ export default function WizardPage() {
             </Button>
           )}
           {isLastStep && (
-            <>
-              <Button variant="outline" onClick={handleSaveOnly} loading={saving} disabled={generating} className="rounded-full">
-                Salvar
-              </Button>
-              <Button onClick={handleSaveAndGenerate} loading={generating} disabled={saving} className="rounded-full">
-                {generating ? "Gerando..." : "Criar e gerar"}
-              </Button>
-            </>
+            <Button onClick={handleSave} loading={saving} className="rounded-full px-6">
+              Criar digest
+            </Button>
           )}
         </div>
       )}

@@ -152,7 +152,7 @@ function SettingsContent() {
             </span>
           </div>
           <span className="text-[12px] text-text-muted">
-            {config.language === "pt-BR" ? "PT-BR" : config.language.toUpperCase()} · {config.summary_style === "executive" ? "Executivo" : "Detalhado"}
+            {config.language === "pt-BR" ? "PT-BR" : config.language.toUpperCase()} · {config.summary_style === "executive" ? "Executivo" : config.summary_style === "complete" ? "Completo" : "Detalhado"}
           </span>
         </Card>
       )}

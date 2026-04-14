@@ -63,10 +63,11 @@ export function AdvancedOptions({
             <Select
               label="Estilo do resumo"
               value={settings.summary_style}
-              onChange={(e) => onSettingsChange({ summary_style: e.target.value as "executive" | "detailed" })}
+              onChange={(e) => onSettingsChange({ summary_style: e.target.value as "executive" | "detailed" | "complete" })}
               options={[
-                { value: "executive", label: "Executivo" },
-                { value: "detailed", label: "Detalhado" },
+                { value: "executive", label: "Executivo (2-3 frases)" },
+                { value: "detailed", label: "Detalhado (4-5 frases)" },
+                { value: "complete", label: "Completo (materia inteira)" },
               ]}
             />
             <Input

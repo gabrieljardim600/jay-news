@@ -27,6 +27,7 @@ const LANG_LABEL: Record<string, string> = {
 const STYLE_LABEL: Record<string, string> = {
   executive: "Executivo",
   detailed: "Detalhado",
+  complete: "Completo",
 };
 
 export function StepReview({

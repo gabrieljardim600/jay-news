@@ -65,7 +65,7 @@ export function SourcesList({ sources, topics, onRefresh, configId }: SourcesLis
           <Plus className="w-3.5 h-3.5" /> Nova
         </button>
       </div>
-      <SourceSuggestions digestConfigId={configId} onAdd={handleSuggestionAdd} />
+      <SourceSuggestions digestConfigId={configId} interests={topics.map(t => t.name)} onAdd={handleSuggestionAdd} />
       {suggestionError && <p className="text-[12px] text-danger mb-3">{suggestionError}</p>}
       {sources.length === 0 && <p className="text-text-muted text-[13px]">Nenhuma fonte cadastrada.</p>}
       <div className="flex flex-col gap-1.5">

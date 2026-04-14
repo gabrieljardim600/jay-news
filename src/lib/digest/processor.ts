@@ -15,9 +15,10 @@ async function processBatch(articles: RawArticle[], topics: Topic[], language: s
   const client = getAnthropicClient();
   const prompt = buildBatchPrompt(articles, topics, language, style);
 
+  const maxTokens = style === "complete" ? 8192 : 4096;
   const response = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
+    max_tokens: maxTokens,
     messages: [{ role: "user", content: prompt }],
   });
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, RefreshCw } from "lucide-react";
+import { Settings, RefreshCw, Loader2 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
 import { DigestTabs } from "@/components/feed/DigestTabs";
@@ -21,6 +21,8 @@ export default function FeedPage() {
   const [current, setCurrent] = useState<DigestWithArticles | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [genStatus, setGenStatus] = useState("");
+  const [genProgress, setGenProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -70,33 +72,71 @@ export default function FeedPage() {
   async function handleGenerate() {
     if (!activeConfigId) return;
     setGenerating(true);
+    setGenStatus("Iniciando...");
+    setGenProgress(5);
+
     try {
       const res = await fetch("/api/digest/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ digestConfigId: activeConfigId }),
       });
-      const { digestId } = await res.json();
-      let attempts = 0;
-      while (attempts < 30) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const check = await fetch(`/api/digest/${digestId}`);
-        const data = await check.json();
-        if (data.status === "completed" || data.status === "failed") {
-          await loadDigestsForConfig(activeConfigId);
-          break;
-        }
-        attempts++;
+
+      if (!res.ok) {
+        setGenStatus("Erro ao iniciar geracao");
+        setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
+        return;
       }
-    } finally {
-      setGenerating(false);
+
+      const { digestId } = await res.json();
+      setGenStatus("Buscando artigos...");
+      setGenProgress(15);
+
+      let attempts = 0;
+      const maxAttempts = 60;
+      while (attempts < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2000));
+        attempts++;
+
+        // Simulate progress
+        const progress = Math.min(90, 15 + (attempts / maxAttempts) * 75);
+        setGenProgress(progress);
+
+        if (attempts < 5) setGenStatus("Buscando artigos...");
+        else if (attempts < 15) setGenStatus("Processando com IA...");
+        else if (attempts < 25) setGenStatus("Gerando resumos...");
+        else setGenStatus("Finalizando...");
+
+        try {
+          const check = await fetch(`/api/digest/${digestId}`);
+          const data = await check.json();
+          if (data.status === "completed") {
+            setGenProgress(100);
+            setGenStatus("Concluido!");
+            await loadDigestsForConfig(activeConfigId);
+            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 800);
+            return;
+          }
+          if (data.status === "failed") {
+            setGenStatus("Falha na geracao");
+            setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
+            return;
+          }
+        } catch {
+          // Network error during poll, keep trying
+        }
+      }
+
+      setGenStatus("Timeout — tente novamente");
+      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
+    } catch {
+      setGenStatus("Erro de conexao");
+      setTimeout(() => { setGenerating(false); setGenStatus(""); setGenProgress(0); }, 3000);
     }
   }
 
   const getTopicName = (topicId: string) =>
     topics.find((t) => t.id === topicId)?.name || "Outros";
-
-  const activeConfig = configs.find((c) => c.id === activeConfigId);
 
   if (loading) return <FeedSkeleton />;
 
@@ -129,11 +169,34 @@ export default function FeedPage() {
                 : "bg-primary text-white hover:bg-primary-hover shadow-sm"
             }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${generating ? "animate-spin" : ""}`} />
-            {generating ? "Gerando..." : "Atualizar"}
+            {generating ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            {generating ? "Gerando..." : "Gerar digest"}
           </button>
         </div>
       </header>
+
+      {/* Generation progress */}
+      {generating && (
+        <div className="mb-6 bg-card glass rounded-[14px] border border-border p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              <span className="text-[14px] font-medium text-text">{genStatus}</span>
+            </div>
+            <span className="text-[12px] text-text-muted font-mono">{Math.round(genProgress)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-surface rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${genProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Digest tabs */}
       <DigestTabs configs={configs} activeId={activeConfigId} onSelect={handleSelectConfig} />
@@ -146,13 +209,13 @@ export default function FeedPage() {
       />
 
       {/* Empty state */}
-      {!current && digests.length === 0 && (
+      {!current && digests.length === 0 && !generating && (
         <div className="text-center py-24">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
             <span className="text-2xl">📭</span>
           </div>
           <p className="text-text-secondary text-[17px] font-medium mb-1">Nenhum digest ainda</p>
-          <p className="text-text-muted text-[14px]">Clique em &quot;Atualizar&quot; para gerar o primeiro.</p>
+          <p className="text-text-muted text-[14px]">Clique em &quot;Gerar digest&quot; para criar o primeiro.</p>
         </div>
       )}
 
