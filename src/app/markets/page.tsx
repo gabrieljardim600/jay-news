@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Plus, Building2, Rss, Tag } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -81,10 +82,10 @@ export default function MarketsListPage() {
             const sourcesCount = m.market_sources?.filter((s) => s.enabled).length ?? 0;
             const subtopicsCount = m.market_subtopics?.length ?? 0;
             return (
-              <button
+              <Link
                 key={m.id}
-                onClick={() => router.push(`/markets/${m.id}`)}
-                onMouseEnter={() => router.prefetch(`/markets/${m.id}`)}
+                href={`/markets/${m.id}`}
+                prefetch
                 className="group text-left p-4 rounded-[14px] bg-surface border border-border hover:border-primary/50 hover:bg-surface-light transition-all active:scale-[0.99]"
               >
                 <div className="flex items-start gap-3 mb-3">
@@ -114,7 +115,7 @@ export default function MarketsListPage() {
                     </span>
                   )}
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>

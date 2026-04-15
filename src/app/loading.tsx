@@ -1,5 +1,5 @@
-import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
+import { ShellSkeleton } from "@/components/ui/ShellSkeleton";
 
 export default function Loading() {
-  return <FeedSkeleton />;
+  return <ShellSkeleton variant="feed" />;
 }

@@ -14,10 +14,9 @@ import { DigestDateSelector } from "@/components/digest/DigestDateSelector";
 import { TrendsHero } from "@/components/feed/TrendsHero";
 import { DigestFilterModal } from "@/components/digest/DigestFilterModal";
 import { useGeneration } from "@/context/GenerationContext";
+import { useDataCache } from "@/context/DataCacheContext";
 import { ViewModeContext, type ViewMode } from "@/context/ViewModeContext";
-import type { Article, Digest, DigestConfig, DigestWithArticles, Topic } from "@/types";
-
-type ConfigCacheEntry = { digests: Digest[]; topics: Topic[] };
+import type { Article, Digest, DigestWithArticles, Topic } from "@/types";
 
 interface DigestFeedProps {
   mode: "news" | "trends";
@@ -26,7 +25,7 @@ interface DigestFeedProps {
 const COPY = {
   news: {
     emptyConfigsTitle: "Nenhum feed de notícias ainda",
-    emptyConfigsBody: 'Crie um digest para começar a receber notícias.',
+    emptyConfigsBody: "Crie um digest para começar a receber notícias.",
     newCtaLabel: "Criar feed de notícias",
     emptyDigestTitle: "Nenhum digest ainda",
     emptyDigestBody: 'Clique em "Gerar" para criar o primeiro.',
@@ -45,20 +44,15 @@ const COPY = {
 } as const;
 
 export function DigestFeed({ mode }: DigestFeedProps) {
-  const [allConfigs, setAllConfigs] = useState<DigestConfig[]>([]);
-  const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
-  const [digests, setDigests] = useState<Digest[]>([]);
-  const [current, setCurrent] = useState<DigestWithArticles | null>(null);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [noConfigs, setNoConfigs] = useState(false);
   const router = useRouter();
-
+  const cache = useDataCache();
   const { genState, startGeneration } = useGeneration();
   const prevGenStatus = useRef(genState.status);
 
-  const configCache = useRef<Map<string, ConfigCacheEntry>>(new Map());
-  const digestCache = useRef<Map<string, DigestWithArticles>>(new Map());
+  const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
+  const [digests, setDigests] = useState<Digest[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [current, setCurrent] = useState<DigestWithArticles | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
@@ -68,107 +62,93 @@ export function DigestFeed({ mode }: DigestFeedProps) {
   const copy = COPY[mode];
 
   const configs = useMemo(
-    () => allConfigs.filter((c) => (mode === "trends" ? c.digest_type === "trends" : c.digest_type !== "trends")),
-    [allConfigs, mode],
+    () => cache.configs.filter((c) => (mode === "trends" ? c.digest_type === "trends" : c.digest_type !== "trends")),
+    [cache.configs, mode],
   );
 
-  // Load configs
+  // Redirect to wizard only when we're certain user has zero configs at all.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await fetch("/api/digest-configs");
-      if (!res.ok) { if (!cancelled) setLoading(false); return; }
-      const data: DigestConfig[] = await res.json();
-      if (cancelled) return;
-      if (!Array.isArray(data) || data.length === 0) {
-        router.replace("/wizard");
-        return;
-      }
-      setAllConfigs(data);
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [router]);
+    if (cache.configsReady && cache.configs.length === 0) router.replace("/wizard");
+  }, [cache.configsReady, cache.configs.length, router]);
 
-  // Pick first matching config for this mode
+  // Pick the active config for this mode.
   useEffect(() => {
-    if (loading) return;
+    if (!cache.configsReady) return;
     if (configs.length === 0) {
-      setNoConfigs(true);
       setActiveConfigId(null);
       setDigests([]);
+      setTopics([]);
       setCurrent(null);
       return;
     }
-    setNoConfigs(false);
-    setActiveConfigId((prev) => {
-      if (prev && configs.some((c) => c.id === prev)) return prev;
-      return configs[0].id;
-    });
-  }, [configs, loading]);
+    setActiveConfigId((prev) => (prev && configs.some((c) => c.id === prev) ? prev : configs[0].id));
+  }, [configs, cache.configsReady]);
 
-  const loadDigest = useCallback(async (id: string) => {
-    const cached = digestCache.current.get(id);
-    if (cached) setCurrent(cached);
-    const res = await fetch(`/api/digest/${id}`);
-    if (!res.ok) return;
-    const data: DigestWithArticles = await res.json();
-    digestCache.current.set(id, data);
-    setCurrent(data);
-  }, []);
-
-  const loadDigestsForConfig = useCallback(async (configId: string, forceRefresh = false) => {
-    if (!forceRefresh) {
-      const cached = configCache.current.get(configId);
-      if (cached) {
-        setDigests(cached.digests);
-        setTopics(cached.topics);
-        if (cached.digests.length > 0) loadDigest(cached.digests[0].id);
-        else setCurrent(null);
-        return;
+  // Hydrate from cache immediately, then revalidate in the background.
+  const hydrate = useCallback(async (configId: string) => {
+    const cached = cache.getBundle(configId);
+    if (cached) {
+      setDigests(cached.digests);
+      setTopics(cached.topics);
+      const first = cached.digests[0];
+      if (first) {
+        const cachedDigest = cache.getDigest(first.id);
+        if (cachedDigest) setCurrent(cachedDigest);
+        // Revalidate quietly
+        cache.loadDigest(first.id).then((d) => d && setCurrent(d));
+      } else {
+        setCurrent(null);
       }
+      return;
     }
-    const [digestsRes, topicsRes] = await Promise.all([
-      fetch(`/api/digests?limit=10&digestConfigId=${configId}`).then((r) => r.json()),
-      fetch(`/api/topics?digestConfigId=${configId}`).then((r) => r.json()),
-    ]);
-    const newDigests = Array.isArray(digestsRes) ? digestsRes : [];
-    const newTopics = Array.isArray(topicsRes) ? topicsRes : [];
-    configCache.current.set(configId, { digests: newDigests, topics: newTopics });
-    setDigests(newDigests);
-    setTopics(newTopics);
-    if (newDigests.length > 0) await loadDigest(newDigests[0].id);
-    else setCurrent(null);
-  }, [loadDigest]);
+    const bundle = await cache.loadBundle(configId);
+    setDigests(bundle.digests);
+    setTopics(bundle.topics);
+    const first = bundle.digests[0];
+    if (first) {
+      const d = await cache.loadDigest(first.id);
+      if (d) setCurrent(d);
+    } else {
+      setCurrent(null);
+    }
+  }, [cache]);
 
   useEffect(() => {
-    if (activeConfigId) loadDigestsForConfig(activeConfigId);
-  }, [activeConfigId, loadDigestsForConfig]);
+    if (activeConfigId) hydrate(activeConfigId);
+  }, [activeConfigId, hydrate]);
 
+  // When a generation completes, invalidate and refetch that config.
   useEffect(() => {
     if (prevGenStatus.current === "generating" && genState.status === "completed" && genState.configId) {
-      configCache.current.delete(genState.configId);
-      loadDigestsForConfig(genState.configId, true);
+      cache.invalidateBundle(genState.configId);
+      cache.loadBundle(genState.configId, true).then(async (b) => {
+        if (genState.configId === activeConfigId) {
+          setDigests(b.digests);
+          setTopics(b.topics);
+          const first = b.digests[0];
+          if (first) {
+            cache.invalidateDigest(first.id);
+            const d = await cache.loadDigest(first.id);
+            if (d) setCurrent(d);
+          }
+        }
+      });
     }
     prevGenStatus.current = genState.status;
-  }, [genState.status, genState.configId, loadDigestsForConfig]);
+  }, [genState.status, genState.configId, activeConfigId, cache]);
 
   function handleSelectConfig(id: string) {
     if (id === activeConfigId) return;
     setSelectedSources(new Set());
     setSelectedTopics(new Set());
     setActiveConfigId(id);
-    const cached = configCache.current.get(id);
-    if (cached && cached.digests.length > 0) {
-      setDigests(cached.digests);
-      setTopics(cached.topics);
-      const latestId = cached.digests[0].id;
-      const cachedDigest = digestCache.current.get(latestId);
-      if (cachedDigest) setCurrent(cachedDigest);
-    } else {
-      setCurrent(null);
-      setDigests([]);
-    }
+  }
+
+  async function handleSelectDigest(id: string) {
+    const cached = cache.getDigest(id);
+    if (cached) setCurrent(cached);
+    const d = await cache.loadDigest(id);
+    if (d) setCurrent(d);
   }
 
   async function handleGenerate() {
@@ -210,14 +190,16 @@ export function DigestFeed({ mode }: DigestFeedProps) {
       body: JSON.stringify({ source }),
     });
     if (res.ok) {
-      digestCache.current.delete(current.id);
-      await loadDigest(current.id);
+      cache.invalidateDigest(current.id);
+      const d = await cache.loadDigest(current.id);
+      if (d) setCurrent(d);
     }
   }
 
-  if (loading) return <FeedSkeleton />;
-
   const isGenerating = genState.status === "generating";
+
+  // Only show full-screen skeleton on first configs load AND only if we have no chrome yet.
+  if (!cache.configsReady) return <FeedSkeleton />;
 
   const generateBtn = (
     <button
@@ -236,7 +218,7 @@ export function DigestFeed({ mode }: DigestFeedProps) {
     <div className="min-h-screen max-w-3xl mx-auto px-5 py-8 pb-28">
       <AppHeader rightSlot={generateBtn} />
 
-      {noConfigs ? (
+      {configs.length === 0 ? (
         <div className="text-center py-20">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
             <span className="text-2xl">{mode === "trends" ? "📈" : "📰"}</span>
@@ -256,7 +238,7 @@ export function DigestFeed({ mode }: DigestFeedProps) {
 
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
-              <DigestDateSelector digests={digests} selectedId={current?.id || null} onSelect={loadDigest} />
+              <DigestDateSelector digests={digests} selectedId={current?.id || null} onSelect={handleSelectDigest} />
             </div>
             {current && (
               <button
