@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Settings, RefreshCw, SlidersHorizontal, BarChart3 } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FeedSkeleton } from "@/components/digest/FeedSkeleton";
 import { DigestTabs } from "@/components/feed/DigestTabs";
@@ -198,6 +198,13 @@ export default function FeedPage() {
         </div>
         <div className="flex gap-1 items-center">
           <ThemeToggle />
+          <button
+            onClick={() => router.push("/markets")}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
+            title="Markets"
+          >
+            <BarChart3 className="w-[18px] h-[18px]" />
+          </button>
           <button
             onClick={() => router.push("/manage")}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
