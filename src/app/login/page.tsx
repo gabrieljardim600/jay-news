@@ -41,7 +41,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm p-8">
         <div className="flex flex-col items-center gap-3 mb-6">
           <Image
-            src="/icons/logo.png"
+            src="/icons/logo.jpeg"
             alt="JNews"
             width={72}
             height={72}

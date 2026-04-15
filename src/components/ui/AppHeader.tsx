@@ -24,7 +24,7 @@ export function AppHeader({ rightSlot }: AppHeaderProps) {
       <div className="flex items-center justify-between gap-3">
         <Link href="/" prefetch className="flex items-center gap-3 min-w-0 group">
           <Image
-            src="/icons/logo.png"
+            src="/icons/logo.jpeg"
             alt="JNews"
             width={40}
             height={40}

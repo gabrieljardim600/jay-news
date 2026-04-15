@@ -1,6 +1,6 @@
 /* JNews service worker — v1 */
-const CACHE = "jnews-v3";
-const PRECACHE = ["/", "/icons/logo.png"];
+const CACHE = "jnews-v4";
+const PRECACHE = ["/", "/icons/logo.jpeg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

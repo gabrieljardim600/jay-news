@@ -16,15 +16,15 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["news", "business", "productivity"],
     icons: [
       {
-        src: "/icons/logo.png",
+        src: "/icons/logo.jpeg",
         sizes: "any",
-        type: "image/png",
+        type: "image/jpeg",
         purpose: "any",
       },
       {
-        src: "/icons/logo.png",
+        src: "/icons/logo.jpeg",
         sizes: "any",
-        type: "image/png",
+        type: "image/jpeg",
         purpose: "maskable",
       },
     ],

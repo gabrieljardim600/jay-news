@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: [{ url: "/icons/logo.png", type: "image/png" }],
-    apple: [{ url: "/icons/logo.png" }],
+    icon: [{ url: "/icons/logo.jpeg", type: "image/jpeg" }],
+    apple: [{ url: "/icons/logo.jpeg" }],
   },
   formatDetection: { telephone: false },
 };
