@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings } from "lucide-react";
+import { Settings, HelpCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ModeNav } from "@/components/ui/ModeNav";
 import { useEffect } from "react";
+import { useOnboarding } from "@/context/OnboardingContext";
 
 interface AppHeaderProps {
   rightSlot?: React.ReactNode;
@@ -14,6 +15,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ rightSlot }: AppHeaderProps) {
   const router = useRouter();
+  const { open: openOnboarding } = useOnboarding();
 
   useEffect(() => {
     router.prefetch("/manage");
@@ -42,6 +44,14 @@ export function AppHeader({ rightSlot }: AppHeaderProps) {
         </Link>
         <div className="flex gap-1 items-center shrink-0">
           <ThemeToggle />
+          <button
+            onClick={() => openOnboarding()}
+            aria-label="Ajuda"
+            title="Ajuda — como usar esta tela"
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
+          >
+            <HelpCircle className="w-[18px] h-[18px]" />
+          </button>
           <button
             onClick={() => router.push("/manage")}
             aria-label="Configurações"
