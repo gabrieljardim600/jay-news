@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
-import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 
 type EntityField = "name" | "website" | "cnpj" | "ticker" | "aliases";
 
@@ -18,10 +18,20 @@ type ModuleMeta = {
   provider_count: number;
 };
 
+type ParsedItem = {
+  title: string;
+  url?: string;
+  snippet?: string;
+  source?: string;
+  date?: string;
+};
+
 type ResearchBlock = {
   providerId: string;
   label: string;
   text: string;
+  items?: ParsedItem[];
+  meta?: Record<string, string>;
   hints?: Record<string, unknown>;
 };
 
@@ -33,6 +43,7 @@ type ModuleRunResult = {
 
 type QueryResponse = {
   entity: { name: string; website: string | null; cnpj: string | null; ticker: string | null };
+  relevance?: { requireTerms: string[]; excludeTerms: string[]; domainAllow: string[]; strict: boolean };
   modules: ModuleRunResult[];
   hints: Record<string, unknown>;
   durationMs: number;
@@ -59,6 +70,8 @@ export default function QueryPage() {
   const [cnpj, setCnpj] = useState("");
   const [ticker, setTicker] = useState("");
   const [aliases, setAliases] = useState("");
+  const [excludeTerms, setExcludeTerms] = useState("");
+  const [strictMatch, setStrictMatch] = useState(true);
 
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
@@ -132,6 +145,8 @@ export default function QueryPage() {
             ticker: ticker.trim() || null,
             aliases: aliases.split(",").map((s) => s.trim()).filter(Boolean),
           },
+          excludeTerms: excludeTerms.split(",").map((s) => s.trim()).filter(Boolean),
+          strictMatch,
           forceRefresh,
         }),
       });
@@ -189,6 +204,8 @@ export default function QueryPage() {
           cnpj={cnpj} setCnpj={setCnpj}
           ticker={ticker} setTicker={setTicker}
           aliases={aliases} setAliases={setAliases}
+          excludeTerms={excludeTerms} setExcludeTerms={setExcludeTerms}
+          strictMatch={strictMatch} setStrictMatch={setStrictMatch}
           canProceed={canProceedStep2}
           running={running}
           error={error}
@@ -315,6 +332,7 @@ function StepModules({
 function StepParams({
   requiredFields, optionalFields,
   name, setName, website, setWebsite, cnpj, setCnpj, ticker, setTicker, aliases, setAliases,
+  excludeTerms, setExcludeTerms, strictMatch, setStrictMatch,
   canProceed, running, error, onBack, onRun,
 }: {
   requiredFields: Set<EntityField>;
@@ -324,6 +342,8 @@ function StepParams({
   cnpj: string; setCnpj: (v: string) => void;
   ticker: string; setTicker: (v: string) => void;
   aliases: string; setAliases: (v: string) => void;
+  excludeTerms: string; setExcludeTerms: (v: string) => void;
+  strictMatch: boolean; setStrictMatch: (v: boolean) => void;
   canProceed: boolean;
   running: boolean;
   error: string | null;
@@ -403,6 +423,33 @@ function StepParams({
         </div>
       )}
 
+      <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">Filtro de relevância</p>
+        <label className="flex items-start gap-2.5 mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={strictMatch}
+            onChange={(e) => setStrictMatch(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-primary"
+          />
+          <div>
+            <p className="text-[13px] font-medium">Busca estrita</p>
+            <p className="text-[11px] text-text-muted leading-snug">
+              Descarta resultados que não mencionem o nome, apelidos ou domínio informados. Reduz falsos positivos com nomes parecidos.
+            </p>
+          </div>
+        </label>
+        <Field label="Palavras para excluir" hint="Separadas por vírgula">
+          <input
+            type="text"
+            value={excludeTerms}
+            onChange={(e) => setExcludeTerms(e.target.value)}
+            placeholder="resort, hotel, turismo"
+            className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors"
+          />
+        </Field>
+      </div>
+
       {error && (
         <div className="mb-4 p-3 rounded-[10px] border border-red-500/30 bg-red-500/5 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -437,6 +484,17 @@ function Field({ label, required, hint, children }: { label: string; required?: 
   );
 }
 
+function hostOf(url?: string): string | null {
+  if (!url) return null;
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return null; }
+}
+
+function fmtDate(d?: string): string | null {
+  if (!d) return null;
+  if (/^\d{8}$/.test(d)) return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+  return d.slice(0, 10);
+}
+
 function StepResults({
   result, onBack, onReset, onRefresh, refreshing,
 }: {
@@ -446,7 +504,10 @@ function StepResults({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
-  const totalBlocks = result.modules.reduce((s, m) => s + m.blocks.length, 0);
+  const totalItems = result.modules.reduce(
+    (s, m) => s + m.blocks.reduce((bb, b) => bb + (b.items?.length ?? (b.meta ? Object.keys(b.meta).length : 1)), 0),
+    0,
+  );
   return (
     <div>
       <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
@@ -463,38 +524,37 @@ function StepResults({
           {result.entity.website && <Chip>site: {result.entity.website}</Chip>}
           {result.entity.cnpj && <Chip>CNPJ: {result.entity.cnpj}</Chip>}
           {result.entity.ticker && <Chip>ticker: {result.entity.ticker}</Chip>}
-          <Chip>{result.modules.length} módulos · {totalBlocks} blocos · {(result.durationMs / 1000).toFixed(1)}s</Chip>
+          {result.relevance?.strict && <Chip>busca estrita</Chip>}
+          {result.relevance?.excludeTerms && result.relevance.excludeTerms.length > 0 && (
+            <Chip>excluir: {result.relevance.excludeTerms.join(", ")}</Chip>
+          )}
+          <Chip>{result.modules.length} módulos · {totalItems} itens · {(result.durationMs / 1000).toFixed(1)}s</Chip>
         </div>
       </div>
 
       {result.modules.length === 0 && (
         <div className="text-center py-12 text-text-muted text-[13px]">
-          Nenhuma fonte retornou dados.
+          Nenhuma fonte retornou dados relevantes. Tente afrouxar a busca estrita ou remover palavras de exclusão.
         </div>
       )}
 
       <div className="flex flex-col gap-3 mb-6">
-        {result.modules.map((m) => (
-          <details key={m.moduleId} open className="rounded-[14px] border border-border bg-surface">
-            <summary className="px-4 py-3 cursor-pointer flex items-center justify-between">
-              <span className="text-[14px] font-semibold">{m.moduleLabel}</span>
-              <span className="text-[11px] text-text-muted">{m.blocks.length} bloco{m.blocks.length === 1 ? "" : "s"}</span>
-            </summary>
-            <div className="border-t border-border">
-              {m.blocks.map((b, i) => (
-                <div key={`${m.moduleId}-${b.providerId}-${i}`} className="px-4 py-3 border-b border-border last:border-b-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[12px] font-semibold">{b.label}</span>
-                    <span className="text-[10px] text-text-muted">{b.providerId}</span>
-                  </div>
-                  <pre className="text-[12px] text-text-secondary whitespace-pre-wrap break-words font-sans leading-relaxed">
-                    {b.text}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          </details>
-        ))}
+        {result.modules.map((m) => {
+          const count = m.blocks.reduce((s, b) => s + (b.items?.length ?? (b.meta ? Object.keys(b.meta).length : 1)), 0);
+          return (
+            <details key={m.moduleId} open className="rounded-[14px] border border-border bg-surface overflow-hidden">
+              <summary className="px-4 py-3 cursor-pointer flex items-center justify-between list-none">
+                <span className="text-[14px] font-semibold">{m.moduleLabel}</span>
+                <span className="text-[11px] text-text-muted">{count} {count === 1 ? "item" : "itens"}</span>
+              </summary>
+              <div className="border-t border-border divide-y divide-border">
+                {m.blocks.map((b, i) => (
+                  <BlockView key={`${m.moduleId}-${b.providerId}-${i}`} block={b} />
+                ))}
+              </div>
+            </details>
+          );
+        })}
       </div>
 
       <div className="flex items-center justify-between">
@@ -506,6 +566,75 @@ function StepResults({
         </Button>
       </div>
     </div>
+  );
+}
+
+function BlockView({ block }: { block: ResearchBlock }) {
+  const hasItems = Array.isArray(block.items) && block.items.length > 0;
+  const hasMeta = block.meta && Object.keys(block.meta).length > 0;
+  return (
+    <div className="px-4 py-3.5">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-[13px] font-semibold">{block.label}</span>
+        <span className="text-[10px] text-text-muted px-1.5 h-4 inline-flex items-center rounded-full bg-background">
+          {block.providerId}
+        </span>
+        {hasItems && <span className="text-[10px] text-text-muted ml-auto">{block.items!.length} resultados</span>}
+      </div>
+      {hasItems ? (
+        <ul className="flex flex-col gap-2">
+          {block.items!.map((it, i) => (
+            <ItemCard key={i} item={it} />
+          ))}
+        </ul>
+      ) : hasMeta ? (
+        <dl className="grid grid-cols-[minmax(100px,max-content)_1fr] gap-x-3 gap-y-1 text-[12px]">
+          {Object.entries(block.meta!).map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-text-muted font-medium">{k}</dt>
+              <dd className="text-text-secondary break-words">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-[12px] text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
+          {block.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ItemCard({ item }: { item: ParsedItem }) {
+  const host = hostOf(item.url);
+  const date = fmtDate(item.date);
+  return (
+    <li className="p-3 rounded-[10px] border border-border bg-background hover:border-text-muted/40 transition-colors">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          {item.url ? (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[13px] font-medium leading-snug hover:text-primary inline-flex items-start gap-1 group"
+            >
+              <span className="line-clamp-2">{item.title}</span>
+              <ExternalLink className="w-3 h-3 mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </a>
+          ) : (
+            <p className="text-[13px] font-medium leading-snug">{item.title}</p>
+          )}
+          {item.snippet && (
+            <p className="text-[12px] text-text-secondary mt-1 leading-snug line-clamp-3">{item.snippet}</p>
+          )}
+          <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-text-muted">
+            {(item.source || host) && <span>{item.source || host}</span>}
+            {date && <><span>·</span><span>{date}</span></>}
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 

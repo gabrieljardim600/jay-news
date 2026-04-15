@@ -1,6 +1,7 @@
 import type { ResearchBlock, ResearchCompetitor, ResearchMarket, ResearchProvider } from "./types";
 import { resolveModules } from "./modules";
 import { entityKeyFor, getCached, setCached, ttlFor } from "./cache";
+import { enrichAndFilter, type RelevanceOptions } from "./relevance";
 
 export type ModuleRunResult = {
   moduleId: string;
@@ -16,6 +17,8 @@ export type RunResearchOptions = {
   providerTimeoutMs?: number;
   /** When true, bypass cache and force a fresh fetch. */
   forceRefresh?: boolean;
+  /** Optional relevance filter applied post-fetch to search-like providers. */
+  relevance?: RelevanceOptions;
 };
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
@@ -68,7 +71,7 @@ export async function runResearch(opts: RunResearchOptions): Promise<ModuleRunRe
   const results: ModuleRunResult[] = [];
 
   // Dedup providers across modules (some appear in multiple, e.g. CVM FRE)
-  const seenProvider = new Map<string, { block: ResearchBlock | null; meta: ProviderRunMeta }>();
+  const seenProvider = new Map<string, { block: ResearchBlock | null; meta: ProviderRunMeta; searchLike: boolean }>();
 
   for (const mod of modules) {
     const enabled = mod.providers.filter((p) => {
@@ -80,11 +83,19 @@ export async function runResearch(opts: RunResearchOptions): Promise<ModuleRunRe
       const existing = seenProvider.get(p.id);
       if (existing) return existing;
       const r = await runProvider(p, opts, entityKey, timeout);
-      seenProvider.set(p.id, r);
-      return r;
+      const withFlag = { ...r, searchLike: !!p.searchLike };
+      seenProvider.set(p.id, withFlag);
+      return withFlag;
     }));
 
-    const blocks = resolved.map((r) => r.block).filter((b): b is ResearchBlock => !!b);
+    const blocks = resolved
+      .map((r) => {
+        if (!r.block) return null;
+        if (opts.relevance) return enrichAndFilter(r.block, r.searchLike, opts.relevance);
+        if (r.searchLike) return enrichAndFilter(r.block, true, { requireTerms: [], excludeTerms: [], strict: false });
+        return enrichAndFilter(r.block, false, { requireTerms: [], excludeTerms: [], strict: false });
+      })
+      .filter((b): b is ResearchBlock => !!b);
     if (blocks.length > 0) {
       results.push({ moduleId: mod.id, moduleLabel: mod.label, blocks });
     }

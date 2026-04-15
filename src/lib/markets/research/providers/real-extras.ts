@@ -86,6 +86,7 @@ export const hnAlgoliaProvider: ResearchProvider = {
   id: "hn-algolia",
   label: "Hacker News (Algolia)",
   description: "Discussões, lançamentos e comentários sobre a marca no HN.",
+  searchLike: true,
   enabled: () => true,
   async fetch(competitor) {
     const q = encodeURIComponent(competitor.name);
@@ -109,6 +110,7 @@ export const hnAlgoliaProvider: ResearchProvider = {
 /* ────────────────────────────────────────────────────────── */
 export const redditProvider: ResearchProvider = {
   id: "reddit",
+  searchLike: true,
   label: "Reddit",
   description: "Posts e comentários públicos citando a marca.",
   enabled: () => true,
@@ -249,6 +251,7 @@ export const portalTransparenciaProvider: ResearchProvider = {
 /* ────────────────────────────────────────────────────────── */
 export const youtubeDataProvider: ResearchProvider = {
   id: "youtube-data",
+  searchLike: true,
   label: "YouTube Data",
   description: "Vídeos recentes citando a marca (reviews, tutoriais, lançamentos).",
   enabled: () => !!process.env.YOUTUBE_API_KEY,

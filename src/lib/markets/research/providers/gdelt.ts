@@ -13,6 +13,7 @@ export const gdeltProvider: ResearchProvider = {
   id: "gdelt",
   label: "GDELT",
   description: "Menções globais em imprensa monitorada pelo GDELT (free).",
+  searchLike: true,
   enabled: () => true,
   async fetch(competitor, market) {
     const q = `"${competitor.name}"`;

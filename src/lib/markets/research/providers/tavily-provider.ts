@@ -5,6 +5,7 @@ export const tavilyCoreProvider: ResearchProvider = {
   id: "tavily-core",
   label: "Busca web (Tavily)",
   description: "Multi-query Tavily em fontes gerais e de mercado.",
+  searchLike: true,
   enabled: () => !!process.env.TAVILY_API_KEY,
   async fetch(competitor, market) {
     const mk = (query: string, domains?: string[]) =>

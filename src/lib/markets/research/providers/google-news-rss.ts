@@ -7,6 +7,7 @@ export const googleNewsRssProvider: ResearchProvider = {
   id: "google-news-rss",
   label: "Google News RSS",
   description: "Notícias recentes via feed público do Google News.",
+  searchLike: true,
   enabled: () => true,
   async fetch(competitor, market) {
     const lang = market.language === "pt-BR" ? "pt-BR" : "en";

@@ -14,6 +14,8 @@ type QueryBody = {
     ticker?: string | null;
     aliases?: string[];
   };
+  excludeTerms?: string[];
+  strictMatch?: boolean;
   forceRefresh?: boolean;
 };
 
@@ -66,6 +68,21 @@ export async function POST(request: Request) {
     language: "pt-BR",
   };
 
+  const host = (() => {
+    if (!competitor.website) return null;
+    try { return new URL(competitor.website).hostname.replace(/^www\./, ""); } catch { return null; }
+  })();
+  const strict = body.strictMatch !== false;
+  const requireTerms = Array.from(new Set([
+    name,
+    ...competitor.aliases,
+    ...(host ? [host.split(".")[0]] : []),
+  ].filter((s) => s && s.length >= 3)));
+  const excludeTerms = Array.isArray(body.excludeTerms)
+    ? body.excludeTerms.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const domainAllow = host ? [host] : [];
+
   const startedAt = Date.now();
   try {
     const runs = await runResearch({
@@ -73,10 +90,12 @@ export async function POST(request: Request) {
       competitor,
       market,
       forceRefresh: !!body.forceRefresh,
+      relevance: { requireTerms, excludeTerms, domainAllow, strict },
     });
     const hints = mergeHints(runs);
     return NextResponse.json({
       entity: { name, website: competitor.website, cnpj: competitor.cnpj, ticker: ticker || null },
+      relevance: { requireTerms, excludeTerms, domainAllow, strict },
       modules: runs,
       hints,
       durationMs: Date.now() - startedAt,

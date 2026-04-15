@@ -18,6 +18,7 @@ function tavilyOnDomain(params: {
     id: params.id,
     label: params.label,
     description: params.description,
+    searchLike: true,
     enabled: params.enabled ?? (() => !!process.env.TAVILY_API_KEY),
     async fetch(competitor) {
       const q = params.queryFactory(competitor.name);

@@ -15,12 +15,25 @@ export type ResearchMarket = {
 
 /** A provider's output — one chunk of text for the prompt + optional structured
  * hints that the post-processor can merge into the final briefing JSON. */
+export type ParsedItem = {
+  title: string;
+  url?: string;
+  snippet?: string;
+  source?: string;
+  date?: string;
+};
+
 export type ResearchBlock = {
   providerId: string;
   /** Title shown in the prompt before the block, e.g. "CVM — Composição da Diretoria". */
   label: string;
   /** Markdown/text body to feed the LLM. */
   text: string;
+  /** Structured items parsed from the text when the provider is search-like.
+   *  When present, clients should prefer rendering items over raw text. */
+  items?: ParsedItem[];
+  /** Informational metadata shown as a key/value list (e.g. brapi, RFB). */
+  meta?: Record<string, string>;
   /** Optional structured hints that skip the LLM step for known-shape data. */
   hints?: {
     cnpj?: string;
@@ -44,6 +57,10 @@ export type ResearchProvider = {
   label: string;
   /** Optional: short user-facing description of what this provider brings. */
   description?: string;
+  /** When true, output is web-search-like and items should be parsed + filtered
+   *  by relevance terms. When false, output is treated as identifier metadata
+   *  (already specific, no relevance filter). Defaults to false. */
+  searchLike?: boolean;
   /** Whether this provider is enabled for the given competitor/market. */
   enabled: (competitor: ResearchCompetitor, market: ResearchMarket) => boolean;
   /** Fetch and return a ResearchBlock, or null when no data. Must not throw. */
