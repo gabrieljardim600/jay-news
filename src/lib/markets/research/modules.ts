@@ -10,15 +10,18 @@ import { bacenIfProvider } from "./providers/bacen-if";
 import { cvmFreProvider } from "./providers/cvm-fre";
 import { patentsProvider } from "./providers/inpi-patents";
 import { reclameAquiProvider } from "./providers/reclame-aqui";
+import { appStoreProvider } from "./providers/app-store";
+import { playStoreProvider } from "./providers/play-store";
+import { trustpilotProvider } from "./providers/trustpilot";
+import { metaAdLibraryProvider } from "./providers/meta-ad-library";
+import { googleMapsReviewsProvider } from "./providers/google-maps";
+import { shodanProvider } from "./providers/shodan";
+import { securityTrailsProvider } from "./providers/securitytrails";
 import {
-  metaAdLibraryProvider, tiktokCreativeProvider,
-  consumidorGovProvider, googleMapsReviewsProvider, trustpilotProvider, glassdoorProvider,
-  jusBrasilProvider, escavadorProvider, douProvider, proconSpProvider,
+  consumidorGovProvider, jusBrasilProvider, douProvider, proconSpProvider,
   crunchbaseBasicProvider, tracxnProvider, startupBaseProvider,
-  shodanProvider, securityTrailsProvider,
-  linkedinPublicProvider,
-  playStoreProvider, appStoreProvider,
-} from "./providers/stubs";
+  linkedinPublicProvider, tiktokCreativeProvider, glassdoorProvider,
+} from "./providers/tavily-targeted";
 
 export const MODULES: ResearchModule[] = [
   {
@@ -32,21 +35,21 @@ export const MODULES: ResearchModule[] = [
   {
     id: "corporate-registry",
     label: "Registro corporativo",
-    description: "BrasilAPI (CNPJ, QSA, capital social) e registro BACEN (IFs e IPs).",
+    description: "BrasilAPI (CNPJ, QSA, capital, CNAE) e registro BACEN (IFs e IPs).",
     icon: "FileText",
     providers: [brasilApiCnpjProvider, bacenIfProvider],
   },
   {
     id: "financial-public",
     label: "Financeiro (empresa aberta)",
-    description: "CVM — Formulário de Referência. Brapi já roda no núcleo.",
+    description: "CVM — Formulário de Referência (composição de diretoria).",
     icon: "TrendingUp",
     providers: [cvmFreProvider],
   },
   {
     id: "leadership",
     label: "Liderança & time",
-    description: "CVM FRE + scrape cuidadoso de perfis LinkedIn citados.",
+    description: "CVM FRE + LinkedIn (busca pública direcionada).",
     icon: "Users",
     providers: [cvmFreProvider, linkedinPublicProvider],
   },
@@ -60,7 +63,7 @@ export const MODULES: ResearchModule[] = [
   {
     id: "paid-marketing",
     label: "Marketing pago",
-    description: "Meta Ad Library e TikTok Creative Center — anúncios ativos.",
+    description: "Meta Ad Library (Graph API) e TikTok Creative Center.",
     icon: "Megaphone",
     providers: [metaAdLibraryProvider, tiktokCreativeProvider],
   },
@@ -81,9 +84,9 @@ export const MODULES: ResearchModule[] = [
   {
     id: "legal",
     label: "Jurídico & regulatório",
-    description: "JusBrasil, Escavador, DOU, Procon-SP, BACEN.",
+    description: "JusBrasil, DOU, Procon-SP, BACEN.",
     icon: "Scale",
-    providers: [jusBrasilProvider, escavadorProvider, douProvider, proconSpProvider, bacenIfProvider],
+    providers: [jusBrasilProvider, douProvider, proconSpProvider, bacenIfProvider],
   },
   {
     id: "funding",
@@ -102,7 +105,7 @@ export const MODULES: ResearchModule[] = [
   {
     id: "infra",
     label: "Infraestrutura & segurança",
-    description: "Shodan e SecurityTrails — footprint técnico.",
+    description: "Shodan e SecurityTrails — footprint técnico exposto.",
     icon: "Server",
     providers: [shodanProvider, securityTrailsProvider],
   },
