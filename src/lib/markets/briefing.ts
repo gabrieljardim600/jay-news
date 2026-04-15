@@ -2,6 +2,8 @@ import { createClient as createSupabase } from "@supabase/supabase-js";
 import { getAnthropicClient } from "@/lib/anthropic/client";
 import { extractJson } from "@/lib/anthropic/json-extract";
 import { searchTavily } from "@/lib/sources/search";
+import { fetchWikipediaSummary, fetchWikipediaExtract } from "./research/wikipedia";
+import { fetchWebsiteMeta } from "./research/website";
 
 export type BriefingContent = {
   resumo_executivo: string;
@@ -10,16 +12,21 @@ export type BriefingContent = {
     sede?: string | null;
     porte?: string | null;
     modelo_negocio?: string | null;
+    setor?: string | null;
+    ticker?: string | null;
+    receita?: string | null;
+    funcionarios?: string | null;
   };
   produtos: string[];
   lideranca: string[];
+  estrutura_acionaria?: string | null;
   pontos_fortes: string[];
   pontos_fracos: string[];
   oportunidades: string[];
   ameacas: string[];
   posicionamento: string;
   movimentos_recentes: string[];
-  identidade_visual: { cores?: string[]; tom?: string | null };
+  identidade_visual: { cores?: string[]; tom?: string | null; logo_url?: string | null };
   perguntas_estrategicas: string[];
   data_quality: number;
 };
@@ -51,7 +58,16 @@ type Competitor = {
   aliases: string[];
 };
 
-function buildPrompt(market: Market, competitor: Competitor, tracking: Article[], research: string): string {
+function buildPrompt(
+  market: Market,
+  competitor: Competitor,
+  tracking: Article[],
+  research: string,
+  wikipedia: string | null,
+  website: string | null,
+  knownColors: string[],
+  logoHint: string | null,
+): string {
   const trackingBlock = tracking.length
     ? tracking
         .slice(0, 20)
@@ -59,7 +75,7 @@ function buildPrompt(market: Market, competitor: Competitor, tracking: Article[]
         .join("\n")
     : "(sem notícias coletadas)";
 
-  return `Você é um analista de inteligência competitiva. Monte um briefing sobre o concorrente abaixo no contexto do mercado indicado. A análise vai guiar decisões estratégicas de produto e posicionamento.
+  return `Você é um analista sênior de inteligência competitiva. Produza um briefing denso, factual e acionável sobre o concorrente. A análise vai embasar decisões estratégicas de produto, posicionamento e resposta competitiva.
 
 == MERCADO ==
 Nome: ${market.name}
@@ -70,45 +86,71 @@ Nome: ${competitor.name}
 ${competitor.website ? `Site: ${competitor.website}` : ""}
 ${competitor.aliases.length ? `Outros nomes: ${competitor.aliases.join(", ")}` : ""}
 
+${wikipedia ? `== WIKIPEDIA (PT-BR) ==\n${wikipedia}\n` : ""}
+${website ? `== DADOS DO SITE OFICIAL ==\n${website}\n` : ""}
+${knownColors.length ? `== CORES DETECTADAS NO SITE (CSS/meta) ==\n${knownColors.join(", ")}\nUse estas cores como base de verdade para a identidade visual. Não invente cores diferentes das observadas.\n` : ""}
+${logoHint ? `== LOGO OFICIAL (og:image / thumbnail) ==\n${logoHint}\n` : ""}
+
 == PESQUISA WEB RECENTE ==
 ${research || "(sem resultados)"}
 
 == NOTÍCIAS MONITORADAS ==
 ${trackingBlock}
 
-== O QUE RETORNAR ==
+== INSTRUÇÕES ==
+Use TODAS as fontes acima — Wikipedia é base confiável para dados históricos, site oficial para produtos/tom, pesquisa web para dados recentes, notícias para movimentos. Para empresas listadas na bolsa, inclua ticker (ex: CIEL3, STNE, PAGS) e setor (ex: "meios de pagamento - listada B3").
+
 Retorne APENAS um JSON válido com a forma EXATA abaixo (sem markdown, sem comentário):
 
 {
-  "resumo_executivo": "2-4 parágrafos densos sobre o concorrente neste mercado",
+  "resumo_executivo": "3-5 parágrafos densos cobrindo história, modelo, posição no mercado e contexto atual",
   "visao_geral": {
-    "fundada": "ano ou null",
-    "sede": "cidade/país ou null",
-    "porte": "descrição qualitativa (ex: 'unicórnio', 'pequeno challenger') ou null",
-    "modelo_negocio": "como monetiza ou null"
+    "fundada": "ano (ex: '1995') ou null",
+    "sede": "cidade, estado/país ou null",
+    "porte": "qualitativo (ex: 'líder consolidado', 'unicórnio') + quantitativo se souber",
+    "modelo_negocio": "como monetiza (ex: 'MDR sobre transações + aluguel de POS') ou null",
+    "setor": "setor primário + secundário se aplicável ou null",
+    "ticker": "ticker + bolsa (ex: 'CIEL3 - B3') se empresa listada, senão null",
+    "receita": "receita anual recente + ano ou null",
+    "funcionarios": "número aproximado + ano ou null"
   },
-  "produtos": ["produto 1", "produto 2"],
-  "lideranca": ["CEO Nome", "CFO Nome"],
-  "pontos_fortes": ["ponto 1", "ponto 2", "ponto 3"],
+  "produtos": ["produto/linha 1 com 1 linha de contexto", "produto 2"],
+  "lideranca": ["Nome Sobrenome — Cargo (desde ano)", "Nome — Cargo"],
+  "estrutura_acionaria": "controladores principais / free float / controlador estatal, quando aplicável; null se desconhecido",
+  "pontos_fortes": ["ponto específico e factual 1", "ponto 2", "ponto 3"],
   "pontos_fracos": ["ponto 1", "ponto 2"],
-  "oportunidades": ["oportunidade 1"],
-  "ameacas": ["ameaça 1"],
-  "posicionamento": "1-2 parágrafos sobre como se posiciona vs. outros players do mercado",
-  "movimentos_recentes": ["descrição breve 1", "descrição breve 2"],
-  "identidade_visual": { "cores": ["#hex", "#hex"], "tom": "descritor curto do tom de comunicação ou null" },
-  "perguntas_estrategicas": ["pergunta 1", "pergunta 2", "pergunta 3"],
-  "data_quality": 0-100 indicando confiança nos dados
+  "oportunidades": ["oportunidade de mercado 1"],
+  "ameacas": ["ameaça competitiva/regulatória 1"],
+  "posicionamento": "1-2 parágrafos sobre posição vs. outros players do mercado (cite concorrentes por nome)",
+  "movimentos_recentes": ["movimento 1 com data (ex: '2025-03: lançou X')", "movimento 2"],
+  "identidade_visual": {
+    "cores": ["#hex", "#hex"],
+    "tom": "descritor do tom (ex: 'institucional e corporativo', 'jovem e direto') ou null",
+    "logo_url": "URL do logo oficial se houver (copie do campo LOGO OFICIAL acima) ou null"
+  },
+  "perguntas_estrategicas": ["pergunta 1 para entender ameaça/oportunidade", "pergunta 2", "pergunta 3"],
+  "data_quality": 0-100 (quanto das fontes trouxe sinal forte, factual e específico)
 }
 
 Regras:
 - Em português do Brasil.
-- Seja específico e factual. Prefira "não encontrado" a inventar.
-- Se a pesquisa não retornou sinal forte, abaixe o data_quality.
-- Movimentos recentes devem citar as notícias acima quando aplicável.
+- Seja específico e factual. Prefira "não encontrado" a inventar — nunca invente nomes de CEOs, tickers ou valores.
+- Identidade visual: SE houver cores detectadas no site, use-as. NUNCA chute cor só pelo nome da empresa.
+- Logo: se o LOGO OFICIAL foi fornecido, copie a URL tal qual no campo "logo_url".
+- Movimentos recentes devem citar data + fonte quando aplicável.
+- Para empresas públicas (tem ticker), sempre preencher setor, receita e estrutura_acionaria.
 - Nunca retorne texto fora do JSON.`;
 }
 
-async function gatherResearch(competitor: Competitor, market: Market): Promise<string> {
+type DeepResearch = {
+  tavily: string;
+  wikipedia: string | null;
+  website: string | null;
+  detectedColors: string[];
+  logoUrl: string | null;
+};
+
+async function gatherResearch(competitor: Competitor, market: Market): Promise<DeepResearch> {
   const domain = competitor.website
     ? (() => {
         try {
@@ -119,6 +161,7 @@ async function gatherResearch(competitor: Competitor, market: Market): Promise<s
       })()
     : null;
 
+  // ── Tavily multi-query
   const queries: Promise<{ query: string; results: { title: string; url: string; content: string }[] }>[] = [];
   const mk = (query: string, domains?: string[]) =>
     searchTavily(query, 5, domains, "basic", 60).then((results) => ({
@@ -126,21 +169,58 @@ async function gatherResearch(competitor: Competitor, market: Market): Promise<s
       results: results.map((r) => ({ title: r.title, url: r.url, content: r.content.slice(0, 300) })),
     }));
 
-  queries.push(mk(`${competitor.name} ${market.name} histórico produtos`));
-  queries.push(mk(`${competitor.name} liderança fundadores CEO`));
-  queries.push(mk(`${competitor.name} vs concorrentes diferencial`));
-  if (domain) queries.push(mk(`${competitor.name} sobre`, [domain]));
+  queries.push(mk(`${competitor.name} ${market.name} histórico produtos receita`));
+  queries.push(mk(`${competitor.name} CEO diretoria fundadores`));
+  queries.push(mk(`${competitor.name} vs concorrentes diferencial posicionamento`));
+  queries.push(mk(`${competitor.name} ações ticker bolsa B3 resultado trimestre`));
+  if (domain) queries.push(mk(`${competitor.name} sobre institucional`, [domain]));
 
-  const buckets = await Promise.allSettled(queries);
-  const blocks: string[] = [];
-  for (const r of buckets) {
+  // ── Wikipedia PT-BR + website scrape in parallel with Tavily
+  const [tavilyBuckets, wikipediaSummary, wikipediaExtract, websiteMeta] = await Promise.all([
+    Promise.allSettled(queries),
+    fetchWikipediaSummary(competitor.name),
+    fetchWikipediaExtract(competitor.name, 3500),
+    competitor.website ? fetchWebsiteMeta(competitor.website) : Promise.resolve(null),
+  ]);
+
+  const tavilyBlocks: string[] = [];
+  for (const r of tavilyBuckets) {
     if (r.status !== "fulfilled") continue;
-    blocks.push(`--- Busca: ${r.value.query} ---`);
+    tavilyBlocks.push(`--- Busca: ${r.value.query} ---`);
     for (const item of r.value.results) {
-      blocks.push(`• ${item.title}\n  ${item.content}\n  ${item.url}`);
+      tavilyBlocks.push(`• ${item.title}\n  ${item.content}\n  ${item.url}`);
     }
   }
-  return blocks.join("\n");
+
+  const wikipediaBlock = wikipediaExtract || wikipediaSummary?.extract
+    ? [
+        wikipediaSummary ? `Título: ${wikipediaSummary.title}${wikipediaSummary.description ? ` (${wikipediaSummary.description})` : ""}\nURL: ${wikipediaSummary.url}` : null,
+        wikipediaExtract || wikipediaSummary?.extract || null,
+      ].filter(Boolean).join("\n\n")
+    : null;
+
+  const websiteBlock = websiteMeta
+    ? [
+        websiteMeta.title ? `Title: ${websiteMeta.title}` : null,
+        websiteMeta.description ? `Meta description: ${websiteMeta.description}` : null,
+        websiteMeta.headline ? `Headline H1: ${websiteMeta.headline}` : null,
+        websiteMeta.themeColor ? `Theme color (meta): ${websiteMeta.themeColor}` : null,
+        websiteMeta.bodySnippet ? `Conteúdo inicial: ${websiteMeta.bodySnippet}` : null,
+      ].filter(Boolean).join("\n")
+    : null;
+
+  const detectedColors = [
+    ...(websiteMeta?.themeColor ? [websiteMeta.themeColor] : []),
+    ...(websiteMeta?.detectedColors ?? []),
+  ].filter((c, i, a) => a.indexOf(c) === i);
+
+  return {
+    tavily: tavilyBlocks.join("\n"),
+    wikipedia: wikipediaBlock,
+    website: websiteBlock,
+    detectedColors,
+    logoUrl: websiteMeta?.ogImage ?? wikipediaSummary?.originalImage ?? null,
+  };
 }
 
 export async function generateCompetitorBriefing(marketId: string, competitorId: string): Promise<{ briefingId: string }> {
@@ -171,17 +251,40 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
     if (!competitor) throw new Error("Competitor not found");
 
     const research = await gatherResearch(competitor, market);
-    const prompt = buildPrompt(market, competitor, (articles || []) as Article[], research);
+    const prompt = buildPrompt(
+      market,
+      competitor,
+      (articles || []) as Article[],
+      research.tavily,
+      research.wikipedia,
+      research.website,
+      research.detectedColors,
+      research.logoUrl,
+    );
 
     const client = getAnthropicClient();
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const content = extractJson<BriefingContent>(text);
+
+    // Safety net: if we scraped real colors/logo, ensure they're preserved even
+    // if Claude dropped them or replaced them with guesses.
+    if (!content.identidade_visual) content.identidade_visual = {};
+    if (research.logoUrl && !content.identidade_visual.logo_url) {
+      content.identidade_visual.logo_url = research.logoUrl;
+    }
+    if (research.detectedColors.length > 0) {
+      const claudeColors = content.identidade_visual.cores || [];
+      const hasAnyDetected = claudeColors.some((c) => research.detectedColors.includes(c.toLowerCase()));
+      if (claudeColors.length === 0 || !hasAnyDetected) {
+        content.identidade_visual.cores = research.detectedColors.slice(0, 4);
+      }
+    }
 
     await svc
       .from("competitor_briefings")

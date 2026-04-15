@@ -5,16 +5,20 @@ import { FileText, Loader2, RefreshCw, CheckCircle2, AlertCircle, Zap, Shield, T
 
 type BriefingContent = {
   resumo_executivo: string;
-  visao_geral: { fundada?: string | null; sede?: string | null; porte?: string | null; modelo_negocio?: string | null };
+  visao_geral: {
+    fundada?: string | null; sede?: string | null; porte?: string | null; modelo_negocio?: string | null;
+    setor?: string | null; ticker?: string | null; receita?: string | null; funcionarios?: string | null;
+  };
   produtos?: string[];
   lideranca?: string[];
+  estrutura_acionaria?: string | null;
   pontos_fortes?: string[];
   pontos_fracos?: string[];
   oportunidades?: string[];
   ameacas?: string[];
   posicionamento?: string;
   movimentos_recentes?: string[];
-  identidade_visual?: { cores?: string[]; tom?: string | null };
+  identidade_visual?: { cores?: string[]; tom?: string | null; logo_url?: string | null };
   perguntas_estrategicas?: string[];
   data_quality?: number;
 };
@@ -68,12 +72,23 @@ function BriefingContentView({ content, quality }: { content: BriefingContent; q
         <p className="text-[14px] text-text leading-relaxed whitespace-pre-line">{content.resumo_executivo}</p>
       </div>
 
-      {content.visao_geral && (content.visao_geral.fundada || content.visao_geral.sede || content.visao_geral.porte || content.visao_geral.modelo_negocio) && (
+      {content.visao_geral && Object.values(content.visao_geral).some(Boolean) && (
         <div className="grid grid-cols-2 gap-2">
           {content.visao_geral.fundada && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Fundada</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.fundada}</p></div>}
           {content.visao_geral.sede && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Sede</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.sede}</p></div>}
           {content.visao_geral.porte && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Porte</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.porte}</p></div>}
           {content.visao_geral.modelo_negocio && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Modelo</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.modelo_negocio}</p></div>}
+          {content.visao_geral.setor && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Setor</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.setor}</p></div>}
+          {content.visao_geral.ticker && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Ticker</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.ticker}</p></div>}
+          {content.visao_geral.receita && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Receita</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.receita}</p></div>}
+          {content.visao_geral.funcionarios && <div className="p-2 rounded-[8px] bg-background border border-border"><p className="text-[9px] text-text-muted uppercase">Funcionários</p><p className="text-[12px] font-medium mt-0.5">{content.visao_geral.funcionarios}</p></div>}
+        </div>
+      )}
+
+      {content.estrutura_acionaria && (
+        <div>
+          <p className="text-[10px] text-text-muted uppercase mb-1">Estrutura acionária</p>
+          <p className="text-[12px] text-text leading-relaxed">{content.estrutura_acionaria}</p>
         </div>
       )}
 
@@ -141,20 +156,33 @@ function BriefingContentView({ content, quality }: { content: BriefingContent; q
         </div>
       ) : null}
 
-      {(content.identidade_visual?.cores?.length || content.identidade_visual?.tom) && (
+      {(content.identidade_visual?.cores?.length || content.identidade_visual?.tom || content.identidade_visual?.logo_url) && (
         <div className="p-3 rounded-[10px] border border-border">
           <p className="text-[10px] text-text-muted uppercase mb-2 flex items-center gap-1"><Palette className="w-3 h-3" /> Identidade visual</p>
-          {content.identidade_visual.cores?.length ? (
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              {content.identidade_visual.cores.map((hex) => (
-                <div key={hex} className="flex items-center gap-1">
-                  <div className="w-6 h-6 rounded-[6px] border border-border" style={{ backgroundColor: hex }} />
-                  <span className="text-[10px] font-mono text-text-muted">{hex}</span>
+          <div className="flex items-start gap-3">
+            {content.identidade_visual.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={content.identidade_visual.logo_url}
+                alt="Logo"
+                className="w-16 h-16 rounded-[8px] object-contain bg-white border border-border shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              {content.identidade_visual.cores?.length ? (
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  {content.identidade_visual.cores.map((hex) => (
+                    <div key={hex} className="flex items-center gap-1">
+                      <div className="w-6 h-6 rounded-[6px] border border-border" style={{ backgroundColor: hex }} />
+                      <span className="text-[10px] font-mono text-text-muted">{hex}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
+              {content.identidade_visual.tom && <p className="text-[12px] text-text-secondary"><span className="text-text font-medium">Tom:</span> {content.identidade_visual.tom}</p>}
             </div>
-          ) : null}
-          {content.identidade_visual.tom && <p className="text-[12px] text-text-secondary"><span className="text-text font-medium">Tom:</span> {content.identidade_visual.tom}</p>}
+          </div>
         </div>
       )}
 
