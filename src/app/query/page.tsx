@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
-import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink, Sparkles, SlidersHorizontal, Settings2 } from "lucide-react";
 
 type EntityField = "name" | "website" | "cnpj" | "ticker" | "aliases";
 
@@ -49,6 +50,32 @@ type QueryResponse = {
   durationMs: number;
 };
 
+type OutputSection = { id: string; title: string; kind: "paragraph" | "list" | "keyvalue"; hint?: string };
+
+type BriefingProfile = {
+  id: string;
+  slug: string;
+  label: string;
+  description: string | null;
+  icon: string | null;
+  module_ids: string[];
+  output_sections: OutputSection[];
+  is_builtin: boolean;
+};
+
+type BriefingResponse = {
+  profile: { id: string; slug: string; label: string };
+  entity: { name: string; website?: string | null; cnpj?: string | null };
+  sections: OutputSection[];
+  content: Record<string, unknown>;
+  modules: ModuleRunResult[];
+  hints: Record<string, unknown>;
+  modelUsed: string;
+  durationMs: number;
+};
+
+type Mode = "profile" | "custom";
+
 const FIELD_LABEL: Record<EntityField, string> = {
   name: "Nome",
   website: "Site",
@@ -61,9 +88,13 @@ type Step = 1 | 2 | 3;
 
 export default function QueryPage() {
   const [step, setStep] = useState<Step>(1);
+  const [mode, setMode] = useState<Mode>("profile");
   const [modules, setModules] = useState<ModuleMeta[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [profiles, setProfiles] = useState<BriefingProfile[]>([]);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [briefing, setBriefing] = useState<BriefingResponse | null>(null);
 
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
@@ -80,18 +111,33 @@ export default function QueryPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await fetch("/api/query/modules");
+      const [mRes, pRes] = await Promise.all([
+        fetch("/api/query/modules"),
+        fetch("/api/briefing-profiles"),
+      ]);
       if (cancelled) return;
-      if (res.ok) {
-        const data: ModuleMeta[] = await res.json();
+      if (mRes.ok) {
+        const data: ModuleMeta[] = await mRes.json();
         setModules(data);
-        // pre-select always_on
         setSelected(new Set(data.filter((m) => m.always_on).map((m) => m.id)));
+      }
+      if (pRes.ok) {
+        const data: BriefingProfile[] = await pRes.json();
+        setProfiles(data);
       }
       setLoadingModules(false);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // When a profile is selected in profile mode, sync its module_ids to `selected`.
+  useEffect(() => {
+    if (mode !== "profile" || !profileId) return;
+    const p = profiles.find((x) => x.id === profileId);
+    if (!p) return;
+    const alwaysOn = modules.filter((m) => m.always_on).map((m) => m.id);
+    setSelected(new Set([...alwaysOn, ...p.module_ids]));
+  }, [mode, profileId, profiles, modules]);
 
   const requiredFields = useMemo<Set<EntityField>>(() => {
     const set = new Set<EntityField>(["name"]);
@@ -133,29 +179,48 @@ export default function QueryPage() {
     setRunning(true);
     setError(null);
     try {
-      const res = await fetch("/api/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          moduleIds: Array.from(selected),
-          entity: {
-            name: name.trim(),
-            website: website.trim() || null,
-            cnpj: cnpj.trim() || null,
-            ticker: ticker.trim() || null,
-            aliases: aliases.split(",").map((s) => s.trim()).filter(Boolean),
-          },
-          excludeTerms: excludeTerms.split(",").map((s) => s.trim()).filter(Boolean),
-          strictMatch,
-          forceRefresh,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
+      const entity = {
+        name: name.trim(),
+        website: website.trim() || null,
+        cnpj: cnpj.trim() || null,
+        ticker: ticker.trim() || null,
+        aliases: aliases.split(",").map((s) => s.trim()).filter(Boolean),
+      };
+      const excl = excludeTerms.split(",").map((s) => s.trim()).filter(Boolean);
+
+      if (mode === "profile" && profileId) {
+        const res = await fetch("/api/query/briefing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileId, entity, excludeTerms: excl, strictMatch, forceRefresh }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || `HTTP ${res.status}`);
+        }
+        const data: BriefingResponse = await res.json();
+        setBriefing(data);
+        setResult(null);
+      } else {
+        const res = await fetch("/api/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            moduleIds: Array.from(selected),
+            entity,
+            excludeTerms: excl,
+            strictMatch,
+            forceRefresh,
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || `HTTP ${res.status}`);
+        }
+        const data: QueryResponse = await res.json();
+        setResult(data);
+        setBriefing(null);
       }
-      const data: QueryResponse = await res.json();
-      setResult(data);
       setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao executar consulta");
@@ -186,7 +251,12 @@ export default function QueryPage() {
       <Stepper step={step} />
 
       {step === 1 && (
-        <StepModules
+        <StepOne
+          mode={mode}
+          setMode={setMode}
+          profiles={profiles}
+          profileId={profileId}
+          setProfileId={setProfileId}
           modules={modules}
           loading={loadingModules}
           selected={selected}
@@ -214,7 +284,17 @@ export default function QueryPage() {
         />
       )}
 
-      {step === 3 && result && (
+      {step === 3 && briefing && (
+        <StepBriefing
+          briefing={briefing}
+          onBack={() => setStep(2)}
+          onReset={resetAll}
+          onRefresh={() => runQuery(true)}
+          refreshing={running}
+        />
+      )}
+
+      {step === 3 && !briefing && result && (
         <StepResults
           result={result}
           onBack={() => setStep(2)}
@@ -258,9 +338,15 @@ function Stepper({ step }: { step: Step }) {
   );
 }
 
-function StepModules({
+function StepOne({
+  mode, setMode, profiles, profileId, setProfileId,
   modules, loading, selected, onToggle, onNext,
 }: {
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  profiles: BriefingProfile[];
+  profileId: string | null;
+  setProfileId: (id: string | null) => void;
   modules: ModuleMeta[];
   loading: boolean;
   selected: Set<string>;
@@ -274,8 +360,75 @@ function StepModules({
       </div>
     );
   }
+  const canAdvance = mode === "profile" ? !!profileId : selected.size > 0;
   return (
     <div>
+      <div className="flex items-center gap-1 p-1 rounded-full bg-surface border border-border mb-4 w-fit">
+        <button
+          onClick={() => setMode("profile")}
+          className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-medium transition-all ${
+            mode === "profile" ? "bg-text text-background" : "text-text-muted hover:text-text"
+          }`}
+        >
+          <Sparkles className="w-3 h-3" /> Perfis prontos
+        </button>
+        <button
+          onClick={() => setMode("custom")}
+          className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-medium transition-all ${
+            mode === "custom" ? "bg-text text-background" : "text-text-muted hover:text-text"
+          }`}
+        >
+          <SlidersHorizontal className="w-3 h-3" /> Módulos à la carte
+        </button>
+        <Link
+          href="/manage/briefing-profiles"
+          className="ml-1 flex items-center gap-1 h-8 px-2.5 rounded-full text-[11px] text-text-muted hover:text-text hover:bg-background transition-colors"
+          title="Gerenciar perfis"
+        >
+          <Settings2 className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {mode === "profile" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-6">
+          {profiles.length === 0 && (
+            <p className="col-span-full text-[13px] text-text-muted py-10 text-center">
+              Nenhum perfil cadastrado.
+            </p>
+          )}
+          {profiles.map((p) => {
+            const isSelected = profileId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setProfileId(p.id)}
+                className={`text-left p-3.5 rounded-[14px] border transition-all active:scale-[0.99] ${
+                  isSelected ? "border-primary/60 bg-primary/5" : "border-border bg-surface hover:border-text-muted/40"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <p className="text-[14px] font-semibold leading-tight">{p.label}</p>
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                    isSelected ? "bg-primary border-primary text-white" : "border-border"
+                  }`}>
+                    {isSelected && <Check className="w-3 h-3" />}
+                  </div>
+                </div>
+                {p.description && (
+                  <p className="text-[12px] text-text-muted leading-snug mb-2">{p.description}</p>
+                )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-text-muted">{p.module_ids.length} módulos</span>
+                  <span className="text-[10px] text-text-muted">{p.output_sections.length} seções</span>
+                  {p.is_builtin && (
+                    <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-background text-text-secondary">padrão</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-6">
         {modules.map((m) => {
           const isSelected = selected.has(m.id);
@@ -317,11 +470,14 @@ function StepModules({
           );
         })}
       </div>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-text-muted">
-          {selected.size} fonte{selected.size === 1 ? "" : "s"} selecionada{selected.size === 1 ? "" : "s"}
+          {mode === "profile"
+            ? profileId ? "1 perfil selecionado" : "Escolha um perfil"
+            : `${selected.size} fonte${selected.size === 1 ? "" : "s"} selecionada${selected.size === 1 ? "" : "s"}`}
         </p>
-        <Button onClick={onNext} className="rounded-full">
+        <Button onClick={onNext} className="rounded-full" disabled={!canAdvance}>
           Continuar <ChevronRight className="w-4 h-4 ml-1" />
         </Button>
       </div>
@@ -641,5 +797,112 @@ function ItemCard({ item }: { item: ParsedItem }) {
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center px-2 h-5 rounded-full bg-background text-text-secondary">{children}</span>
+  );
+}
+
+function StepBriefing({
+  briefing, onBack, onReset, onRefresh, refreshing,
+}: {
+  briefing: BriefingResponse;
+  onBack: () => void;
+  onReset: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const totalSources = briefing.modules.reduce(
+    (s, m) => s + m.blocks.reduce((bb, b) => bb + (b.items?.length ?? 1), 0),
+    0,
+  );
+  return (
+    <div>
+      <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Briefing · {briefing.profile.label}
+            </p>
+            <p className="text-[18px] font-semibold truncate">{briefing.entity.name}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onRefresh} loading={refreshing} className="rounded-full shrink-0">
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-[11px]">
+          {briefing.entity.website && <Chip>site: {briefing.entity.website}</Chip>}
+          {briefing.entity.cnpj && <Chip>CNPJ: {briefing.entity.cnpj}</Chip>}
+          <Chip>{briefing.sections.length} seções · {totalSources} fontes · {(briefing.durationMs / 1000).toFixed(1)}s</Chip>
+          <Chip>{briefing.modelUsed}</Chip>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 mb-6">
+        {briefing.sections.map((sec) => (
+          <SectionCard key={sec.id} section={sec} value={briefing.content[sec.id]} />
+        ))}
+      </div>
+
+      <details className="mb-5 rounded-[14px] border border-border bg-surface">
+        <summary className="px-4 py-3 cursor-pointer text-[13px] font-semibold list-none flex items-center justify-between">
+          <span>Dados de pesquisa brutos</span>
+          <span className="text-[11px] text-text-muted">{briefing.modules.length} módulos</span>
+        </summary>
+        <div className="border-t border-border divide-y divide-border">
+          {briefing.modules.map((m) => (
+            <details key={m.moduleId} className="group">
+              <summary className="px-4 py-2.5 cursor-pointer text-[12px] flex items-center justify-between list-none hover:bg-background/50">
+                <span className="font-medium">{m.moduleLabel}</span>
+                <span className="text-text-muted">{m.blocks.reduce((s, b) => s + (b.items?.length ?? 1), 0)} itens</span>
+              </summary>
+              <div className="px-4 pb-3 divide-y divide-border">
+                {m.blocks.map((b, i) => (
+                  <BlockView key={`${m.moduleId}-${b.providerId}-${i}`} block={b} />
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      </details>
+
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={onBack} className="rounded-full">
+          <ChevronLeft className="w-4 h-4 mr-1" /> Ajustar parâmetros
+        </Button>
+        <Button variant="outline" onClick={onReset} className="rounded-full">
+          Nova consulta
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ section, value }: { section: OutputSection; value: unknown }) {
+  const empty = value == null || (Array.isArray(value) && value.length === 0) || (typeof value === "object" && !Array.isArray(value) && Object.keys(value ?? {}).length === 0) || value === "";
+  return (
+    <div className="p-4 rounded-[14px] border border-border bg-surface">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">{section.title}</p>
+      {empty ? (
+        <p className="text-[12px] text-text-muted italic">não encontrado</p>
+      ) : section.kind === "paragraph" ? (
+        <p className="text-[13px] text-text leading-relaxed whitespace-pre-wrap">{String(value)}</p>
+      ) : section.kind === "list" ? (
+        <ul className="flex flex-col gap-1.5 text-[13px]">
+          {(value as unknown[]).map((item, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-primary font-semibold shrink-0">·</span>
+              <span className="text-text leading-snug">{typeof item === "string" ? item : JSON.stringify(item)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <dl className="grid grid-cols-[minmax(120px,max-content)_1fr] gap-x-3 gap-y-1 text-[13px]">
+          {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-text-muted font-medium">{k}</dt>
+              <dd className="text-text break-words">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
   );
 }

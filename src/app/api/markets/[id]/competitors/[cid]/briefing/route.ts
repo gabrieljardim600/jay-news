@@ -30,15 +30,18 @@ export async function GET(_req: Request, { params }: Params) {
   return NextResponse.json(data);
 }
 
-export async function POST(_req: Request, { params }: Params) {
+export async function POST(req: Request, { params }: Params) {
   const { id, cid } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!await assertOwner(supabase, user.id, id, cid)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const body = await req.json().catch(() => ({}));
+  const profileId = typeof body?.profileId === "string" ? body.profileId : null;
+
   try {
-    const result = await generateCompetitorBriefing(id, cid);
+    const result = await generateCompetitorBriefing(id, cid, { profileId: profileId || undefined });
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

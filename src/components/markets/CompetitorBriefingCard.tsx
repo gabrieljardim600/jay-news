@@ -23,10 +23,16 @@ type BriefingContent = {
   data_quality?: number;
 };
 
+type ProfileSection = { id: string; title: string; kind: "paragraph" | "list" | "keyvalue"; hint?: string };
+type ProfileBriefingContent = {
+  profile: { id: string; slug: string; label: string };
+  sections: ProfileSection[];
+  body: Record<string, unknown>;
+};
 type Briefing = {
   id: string;
   status: "processing" | "completed" | "failed";
-  content: BriefingContent | null;
+  content: BriefingContent | ProfileBriefingContent | null;
   resumo: string | null;
   data_quality: number | null;
   articles_analyzed: number;
@@ -34,7 +40,11 @@ type Briefing = {
   started_at: string;
   finished_at: string | null;
   created_at: string;
+  profile_slug: string | null;
+  profile_label: string | null;
 };
+
+type ProfileOption = { id: string; slug: string; label: string; description: string | null };
 
 interface Props {
   marketId: string;
@@ -53,6 +63,53 @@ function QualityBar({ value }: { value: number }) {
         <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
       </div>
       <span className="text-[10px] text-text-muted font-medium w-8 text-right">{value}%</span>
+    </div>
+  );
+}
+
+function isProfileContent(c: BriefingContent | ProfileBriefingContent): c is ProfileBriefingContent {
+  return c != null && typeof c === "object" && "body" in c && "sections" in c;
+}
+
+function ProfileBriefingView({ content }: { content: ProfileBriefingContent }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <p className="text-[10px] text-text-muted uppercase mb-1">Perfil</p>
+        <p className="text-[13px] font-semibold">{content.profile.label}</p>
+      </div>
+      {content.sections.map((sec) => {
+        const v = content.body[sec.id];
+        const empty = v == null || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v ?? {}).length === 0) || v === "";
+        return (
+          <div key={sec.id}>
+            <p className="text-[10px] text-text-muted uppercase mb-1">{sec.title}</p>
+            {empty ? (
+              <p className="text-[12px] text-text-muted italic">não encontrado</p>
+            ) : sec.kind === "paragraph" ? (
+              <p className="text-[13px] text-text leading-relaxed whitespace-pre-line">{String(v)}</p>
+            ) : sec.kind === "list" ? (
+              <ul className="text-[13px] space-y-1">
+                {(v as unknown[]).map((it, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <span className="text-primary font-semibold">·</span>
+                    <span>{typeof it === "string" ? it : JSON.stringify(it)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <dl className="grid grid-cols-[minmax(110px,max-content)_1fr] gap-x-3 gap-y-1 text-[13px]">
+                {Object.entries(v as Record<string, unknown>).map(([k, vv]) => (
+                  <div key={k} className="contents">
+                    <dt className="text-text-muted font-medium">{k}</dt>
+                    <dd className="text-text break-words">{typeof vv === "string" ? vv : JSON.stringify(vv)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -198,10 +255,23 @@ function BriefingContentView({ content, quality }: { content: BriefingContent; q
 
 export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [profileId, setProfileId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await fetch("/api/briefing-profiles");
+      if (cancelled || !r.ok) return;
+      const data: ProfileOption[] = await r.json();
+      setProfiles(data);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/markets/${marketId}/competitors/${competitorId}/briefing`);
@@ -220,7 +290,11 @@ export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch(`/api/markets/${marketId}/competitors/${competitorId}/briefing`, { method: "POST" });
+      const res = await fetch(`/api/markets/${marketId}/competitors/${competitorId}/briefing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileId ? { profileId } : {}),
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Erro (${res.status})`);
@@ -248,16 +322,30 @@ export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
             </span>
           )}
         </div>
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className={`h-8 px-3 flex items-center gap-1.5 rounded-full text-[12px] font-medium transition-all ${
-            generating ? "bg-background text-text-muted" : "bg-primary text-white hover:bg-primary-hover"
-          }`}
-        >
-          {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          {generating ? "Gerando..." : hasCompleted ? "Atualizar" : "Gerar briefing"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <select
+            value={profileId}
+            onChange={(e) => setProfileId(e.target.value)}
+            disabled={generating}
+            className="h-8 px-2.5 rounded-full text-[11px] bg-background border border-border text-text outline-none focus:border-primary transition-colors"
+            title="Perfil de briefing"
+          >
+            <option value="">Completo</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className={`h-8 px-3 flex items-center gap-1.5 rounded-full text-[12px] font-medium transition-all ${
+              generating ? "bg-background text-text-muted" : "bg-primary text-white hover:bg-primary-hover"
+            }`}
+          >
+            {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {generating ? "Gerando..." : hasCompleted ? "Atualizar" : "Gerar briefing"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -289,9 +377,16 @@ export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
                     {b.status === "processing" && <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />}
                     {b.status === "failed" && <AlertCircle className="w-4 h-4 text-danger shrink-0" />}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium">{formatDate(b.created_at)}</p>
+                      <p className="text-[12px] font-medium flex items-center gap-1.5">
+                        {formatDate(b.created_at)}
+                        {b.profile_label && (
+                          <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-primary/10 text-primary font-normal">
+                            {b.profile_label}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[10px] text-text-muted">
-                        {b.status === "completed" && `${b.articles_analyzed} artigos · qualidade ${b.data_quality ?? "-"}%`}
+                        {b.status === "completed" && (b.profile_slug ? "perfil focado" : `${b.articles_analyzed} artigos · qualidade ${b.data_quality ?? "-"}%`)}
                         {b.status === "processing" && "Em processamento..."}
                         {b.status === "failed" && (b.error || "Falhou")}
                       </p>
@@ -300,7 +395,9 @@ export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
                 </button>
                 {isExpanded && b.status === "completed" && b.content && (
                   <div className="px-4 pb-4">
-                    <BriefingContentView content={b.content} quality={b.data_quality} />
+                    {isProfileContent(b.content)
+                      ? <ProfileBriefingView content={b.content} />
+                      : <BriefingContentView content={b.content as BriefingContent} quality={b.data_quality} />}
                   </div>
                 )}
               </div>

@@ -3,6 +3,8 @@ import { getAnthropicClient } from "@/lib/anthropic/client";
 import { extractJson } from "@/lib/anthropic/json-extract";
 import { runResearch, renderForPrompt, mergeHints, type ModuleRunResult } from "./research/runner";
 import type { ResearchCompetitor, ResearchMarket } from "./research/types";
+import { runProfileBriefing } from "./briefing-profiles/synth";
+import type { BriefingProfile } from "./briefing-profiles/service";
 
 export type BriefingContent = {
   resumo_executivo: string;
@@ -124,12 +126,39 @@ Regras:
 - Nunca retorne texto fora do JSON.`;
 }
 
-export async function generateCompetitorBriefing(marketId: string, competitorId: string): Promise<{ briefingId: string }> {
+export async function generateCompetitorBriefing(
+  marketId: string,
+  competitorId: string,
+  opts?: { profileId?: string },
+): Promise<{ briefingId: string }> {
   const svc = serviceClient();
+
+  // Resolve optional profile (service-role client bypasses RLS, so we must
+  // scope to the owner of the market).
+  let profile: BriefingProfile | null = null;
+  if (opts?.profileId) {
+    const { data: marketRow } = await svc.from("markets").select("user_id").eq("id", marketId).single();
+    if (marketRow?.user_id) {
+      const { data: prof } = await svc
+        .from("briefing_profiles")
+        .select("*")
+        .eq("id", opts.profileId)
+        .eq("user_id", marketRow.user_id)
+        .maybeSingle();
+      profile = (prof as BriefingProfile | null) ?? null;
+    }
+  }
 
   const { data: row, error: insertErr } = await svc
     .from("competitor_briefings")
-    .insert({ market_id: marketId, competitor_id: competitorId, status: "processing", model_used: MODEL })
+    .insert({
+      market_id: marketId,
+      competitor_id: competitorId,
+      status: "processing",
+      model_used: MODEL,
+      profile_slug: profile?.slug ?? null,
+      profile_label: profile?.label ?? null,
+    })
     .select()
     .single();
   if (insertErr || !row) throw new Error(insertErr?.message || "Failed to create briefing row");
@@ -149,6 +178,27 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
     ]);
     if (!market) throw new Error("Market not found");
     if (!competitor) throw new Error("Competitor not found");
+
+    // Profile-driven briefing — use focused modules + custom prompt/schema
+    if (profile) {
+      const result = await runProfileBriefing({
+        profile,
+        competitor: competitor as ResearchCompetitor,
+        market: market as ResearchMarket,
+      });
+      await svc
+        .from("competitor_briefings")
+        .update({
+          status: "completed",
+          content: { profile: result.profile, sections: result.sections, body: result.content },
+          resumo: null,
+          data_quality: null,
+          articles_analyzed: articles?.length ?? 0,
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", briefingId);
+      return { briefingId };
+    }
 
     const runs: ModuleRunResult[] = await runResearch({
       moduleIds: market.research_modules ?? ["core"],
