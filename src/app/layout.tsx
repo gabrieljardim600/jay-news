@@ -26,12 +26,8 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
   },
   icons: {
-    icon: [
-      { url: "/icons/png-192", sizes: "192x192", type: "image/png" },
-      { url: "/icons/png-512", sizes: "512x512", type: "image/png" },
-      { url: "/icons/icon.svg", type: "image/svg+xml" },
-    ],
-    apple: [{ url: "/icons/png-192", sizes: "192x192" }],
+    icon: [{ url: "/icons/logo.png", type: "image/png" }],
+    apple: [{ url: "/icons/logo.png" }],
   },
   formatDetection: { telephone: false },
 };

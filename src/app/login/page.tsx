@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
@@ -38,7 +39,17 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <Card className="w-full max-w-sm p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">JNews</h1>
+        <div className="flex flex-col items-center gap-3 mb-6">
+          <Image
+            src="/icons/logo.png"
+            alt="JNews"
+            width={72}
+            height={72}
+            priority
+            className="rounded-xl"
+          />
+          <h1 className="text-2xl font-bold text-center">JNews</h1>
+        </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
             label="Email"

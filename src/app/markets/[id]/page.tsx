@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Rss, Tag, RefreshCw, Loader2, ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import Image from "next/image";
+import { MarketDetailSkeleton } from "@/components/markets/MarketsListSkeleton";
 
 type Competitor = {
   id: string;
@@ -116,8 +117,18 @@ export default function MarketDetailPage() {
     return map;
   }, [articles]);
 
-  if (loading) return <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 text-text-muted text-[14px]">Carregando...</div>;
-  if (!market) return <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 text-text-muted text-[14px]">Market não encontrado.</div>;
+  if (loading) return <MarketDetailSkeleton />;
+  if (!market) return (
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 text-center">
+      <p className="text-text-secondary text-[15px] mb-4">Market não encontrado.</p>
+      <button
+        onClick={() => router.push("/markets")}
+        className="h-9 px-5 rounded-full bg-surface hover:bg-surface-light text-[13px] text-text-secondary transition-colors"
+      >
+        ← Voltar para Markets
+      </button>
+    </div>
+  );
 
   const enabledCompetitors = market.market_competitors.filter((c) => c.enabled);
 
