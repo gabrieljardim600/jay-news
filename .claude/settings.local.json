@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"CREATE TABLE market_articles\\\\|market_articles\" C:/Users/Gabriel/Documents/GitHub/jay-news/supabase/migrations/*.sql)",
+      "Bash(grep -v \"//\")",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(npx eslint *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(npx tsx *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.infomoney.com.br/mercados/cielo-ciel3-venda-estrategica-e-rumo-vendas-o-que-dizer-das-acoes-hoje/\")",
+      "Bash(curl -s \"https://news.google.com/rss/search?q=cielo&hl=pt-BR&gl=BR&ceid=BR:pt\")"
+    ]
+  }
+}

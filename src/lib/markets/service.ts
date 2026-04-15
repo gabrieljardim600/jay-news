@@ -63,6 +63,7 @@ export async function runMarketCollection(marketId: string): Promise<RunResult> 
         source_name: a.source_name,
         source_url: a.source_url,
         summary: a.summary,
+        full_content: a.full_content,
         image_url: a.image_url,
         published_at: a.published_at,
         relevance_score: a.relevance_score,

@@ -4,6 +4,7 @@ import { fetchRssFeed } from "@/lib/sources/rss";
 import { filterArticles, looksPortuguese } from "@/lib/digest/filter";
 import { BR_NEWS_DOMAINS } from "@/lib/digest/processor";
 import { findMentions, type CompetitorRef } from "./competitor-matcher";
+import { enrichArticles } from "@/lib/sources/enrich";
 
 type MarketRow = {
   id: string;
@@ -35,6 +36,7 @@ export type CollectedArticle = {
   source_name: string;
   source_url: string;
   summary: string | null;
+  full_content: string | null;
   image_url: string | null;
   published_at: string | null;
   relevance_score: number;
@@ -170,6 +172,7 @@ export async function collectForMarket({ market, subtopics, competitors, sources
       source_name: article.source_name || "Desconhecido",
       source_url: normalized,
       summary: article.content || null,
+      full_content: null,
       image_url: article.image_url || null,
       published_at: article.published_at || null,
       relevance_score: 0,
@@ -201,5 +204,35 @@ export async function collectForMarket({ market, subtopics, competitors, sources
     art.relevance_score = Math.min(10, 2 + mentionsBoost + viaBoost + recencyBoost);
   }
 
-  return [...byUrl.values()].sort((a, b) => b.relevance_score - a.relevance_score);
+  const sorted = [...byUrl.values()].sort((a, b) => b.relevance_score - a.relevance_score);
+
+  // ── 5. Enriquece o top-N com corpo limpo da matéria (Jina → HTML fallback).
+  // Só os mais relevantes pra conter custo/tempo; o resto fica só com summary.
+  const ENRICH_LIMIT = 40;
+  const toEnrich = sorted.slice(0, ENRICH_LIMIT).map<RawArticle>((a) => ({
+    title: a.title,
+    url: a.source_url,
+    source_name: a.source_name,
+    content: a.summary || "",
+    full_content: undefined,
+    image_url: a.image_url || undefined,
+    published_at: a.published_at || undefined,
+  }));
+  if (toEnrich.length > 0) {
+    try {
+      const enriched = await enrichArticles(toEnrich);
+      for (let i = 0; i < enriched.length; i++) {
+        const target = sorted[i];
+        const src = enriched[i];
+        if (src.full_content && src.full_content.length >= 200) {
+          target.full_content = src.full_content;
+        }
+        if (!target.image_url && src.image_url) target.image_url = src.image_url;
+      }
+    } catch (e) {
+      console.error("[markets/collector] enrichArticles failed", e);
+    }
+  }
+
+  return sorted;
 }

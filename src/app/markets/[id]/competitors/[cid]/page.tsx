@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, ExternalLink, Globe } from "lucide-react";
+import { ArrowLeft, Building2, Globe } from "lucide-react";
 import Image from "next/image";
 import { CompetitorBriefingCard } from "@/components/markets/CompetitorBriefingCard";
+import { ArticleRow } from "@/components/markets/ArticleRow";
 
 type Competitor = {
   id: string;
@@ -22,6 +23,7 @@ type Article = {
   source_name: string;
   source_url: string;
   summary: string | null;
+  full_content: string | null;
   image_url: string | null;
   published_at: string | null;
   detected_at: string;
@@ -121,33 +123,7 @@ export default function CompetitorDetailPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {articles.map((a) => (
-              <a
-                key={a.id}
-                href={a.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex gap-3 p-3 rounded-[12px] bg-surface border border-border hover:border-primary/40 transition-all"
-              >
-                {a.image_url && (
-                  <div className="relative w-16 h-16 rounded-[8px] overflow-hidden bg-background shrink-0">
-                    <Image src={a.image_url} alt="" fill sizes="64px" className="object-cover" unoptimized />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold leading-snug line-clamp-2">{a.title}</p>
-                  {a.summary && <p className="text-[11px] text-text-secondary mt-1 line-clamp-2">{a.summary}</p>}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="text-[10px] text-text-muted">{a.source_name}</span>
-                    {a.published_at && <span className="text-[10px] text-text-muted">· {timeAgo(a.published_at)}</span>}
-                    <ExternalLink className="w-2.5 h-2.5 text-text-muted" />
-                    {a.found_via === "competitor" && (
-                      <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                        Direto
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </a>
+              <ArticleRow key={a.id} article={a} timeAgo={timeAgo} />
             ))}
           </div>
         )}
