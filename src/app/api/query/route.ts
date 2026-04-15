@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runResearch, mergeHints } from "@/lib/markets/research/runner";
+import { autoDiscoverEntity } from "@/lib/markets/research/auto-discover";
 import type { ResearchCompetitor, ResearchMarket } from "@/lib/markets/research/types";
 
 export const maxDuration = 300;
@@ -50,12 +51,17 @@ export async function POST(request: Request) {
 
   const moduleIds = Array.isArray(body.moduleIds) ? body.moduleIds.filter((s) => typeof s === "string") : [];
 
+  // Auto-descobre website/CNPJ quando o usuário não informou.
+  const userWebsite = sanitizeWebsite(body.entity?.website);
+  const userCnpj = sanitizeCnpj(body.entity?.cnpj);
+  const discovery = await autoDiscoverEntity({ name, website: userWebsite, cnpj: userCnpj });
+
   const competitor: ResearchCompetitor = {
     id: `query-${Date.now()}`,
     name,
-    website: sanitizeWebsite(body.entity?.website),
+    website: discovery.website,
     aliases: Array.isArray(body.entity?.aliases) ? body.entity!.aliases!.filter(Boolean) : [],
-    cnpj: sanitizeCnpj(body.entity?.cnpj),
+    cnpj: discovery.cnpj,
   };
 
   const ticker = body.entity?.ticker?.trim();
@@ -95,6 +101,7 @@ export async function POST(request: Request) {
     const hints = mergeHints(runs);
     return NextResponse.json({
       entity: { name, website: competitor.website, cnpj: competitor.cnpj, ticker: ticker || null },
+      discovery: { discovered: discovery.discovered },
       relevance: { requireTerms, excludeTerms, domainAllow, strict },
       modules: runs,
       hints,

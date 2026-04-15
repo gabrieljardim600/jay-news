@@ -44,6 +44,7 @@ type ModuleRunResult = {
 
 type QueryResponse = {
   entity: { name: string; website: string | null; cnpj: string | null; ticker: string | null };
+  discovery?: { discovered: Array<"website" | "cnpj"> };
   relevance?: { requireTerms: string[]; excludeTerms: string[]; domainAllow: string[]; strict: boolean };
   modules: ModuleRunResult[];
   hints: Record<string, unknown>;
@@ -66,6 +67,7 @@ type BriefingProfile = {
 type BriefingResponse = {
   profile: { id: string; slug: string; label: string };
   entity: { name: string; website?: string | null; cnpj?: string | null };
+  discovery?: { discovered: Array<"website" | "cnpj"> };
   sections: OutputSection[];
   content: Record<string, unknown>;
   modules: ModuleRunResult[];
@@ -139,31 +141,19 @@ export default function QueryPage() {
     setSelected(new Set([...alwaysOn, ...p.module_ids]));
   }, [mode, profileId, profiles, modules]);
 
-  const requiredFields = useMemo<Set<EntityField>>(() => {
-    const set = new Set<EntityField>(["name"]);
+  // Só o nome é obrigatório. Qualquer outro campo reforça a pesquisa, mas a
+  // plataforma tenta descobrir site e CNPJ sozinha via auto-discovery.
+  const hintedFields = useMemo<Set<EntityField>>(() => {
+    const set = new Set<EntityField>();
     for (const m of modules) {
       if (!selected.has(m.id) && !m.always_on) continue;
-      m.required_fields.forEach((f) => set.add(f));
+      m.required_fields.forEach((f) => { if (f !== "name") set.add(f); });
+      m.optional_fields.forEach((f) => set.add(f));
     }
     return set;
   }, [modules, selected]);
 
-  const optionalFields = useMemo<Set<EntityField>>(() => {
-    const set = new Set<EntityField>();
-    for (const m of modules) {
-      if (!selected.has(m.id) && !m.always_on) continue;
-      m.optional_fields.forEach((f) => { if (!requiredFields.has(f)) set.add(f); });
-    }
-    return set;
-  }, [modules, selected, requiredFields]);
-
-  const canProceedStep2 = useMemo(() => {
-    if (!name.trim()) return false;
-    if (requiredFields.has("website") && !website.trim()) return false;
-    if (requiredFields.has("cnpj") && cnpj.replace(/\D/g, "").length !== 14) return false;
-    if (requiredFields.has("ticker") && !ticker.trim()) return false;
-    return true;
-  }, [name, website, cnpj, ticker, requiredFields]);
+  const canProceedStep2 = useMemo(() => name.trim().length >= 2, [name]);
 
   function toggleModule(id: string) {
     const m = modules.find((x) => x.id === id);
@@ -272,8 +262,7 @@ export default function QueryPage() {
 
       {step === 2 && (
         <StepParams
-          requiredFields={requiredFields}
-          optionalFields={optionalFields}
+          hintedFields={hintedFields}
           name={name} setName={setName}
           website={website} setWebsite={setWebsite}
           cnpj={cnpj} setCnpj={setCnpj}
@@ -513,13 +502,12 @@ function StepOne({
 }
 
 function StepParams({
-  requiredFields, optionalFields,
+  hintedFields,
   name, setName, website, setWebsite, cnpj, setCnpj, ticker, setTicker, aliases, setAliases,
   excludeTerms, setExcludeTerms, strictMatch, setStrictMatch,
   canProceed, running, error, onBack, onRun,
 }: {
-  requiredFields: Set<EntityField>;
-  optionalFields: Set<EntityField>;
+  hintedFields: Set<EntityField>;
   name: string; setName: (v: string) => void;
   website: string; setWebsite: (v: string) => void;
   cnpj: string; setCnpj: (v: string) => void;
@@ -533,78 +521,48 @@ function StepParams({
   onBack: () => void;
   onRun: () => void;
 }) {
-  const showField = (f: EntityField) => requiredFields.has(f) || optionalFields.has(f);
+  const inputClass = "w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors";
   return (
     <div>
       <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">Obrigatórios</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">Identificação do alvo</p>
         <Field label="Nome da empresa ou pessoa" required>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Ex.: Acme S.A."
-            className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors"
+            placeholder="Ex.: Cielo, Nubank, Acme S.A."
+            className={inputClass}
+            autoFocus
           />
         </Field>
-        {requiredFields.has("website") && (
-          <Field label="Site oficial" required>
-            <input
-              type="text"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://acme.com"
-              className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors"
-            />
-          </Field>
-        )}
-        {requiredFields.has("cnpj") && (
-          <Field label="CNPJ" required hint="14 dígitos">
-            <input
-              type="text"
-              value={cnpj}
-              onChange={(e) => setCnpj(e.target.value)}
-              placeholder="00.000.000/0001-00"
-              className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors"
-            />
-          </Field>
-        )}
-        {requiredFields.has("ticker") && (
-          <Field label="Ticker (B3/bolsa)" required>
-            <input
-              type="text"
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              placeholder="PETR4"
-              className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors"
-            />
-          </Field>
-        )}
+        <p className="text-[11px] text-text-muted leading-snug -mt-1">
+          O único campo obrigatório. Os opcionais abaixo refinam a pesquisa — se ficarem em branco, a plataforma tenta descobri-los sozinha com base no nome.
+        </p>
       </div>
 
-      {(optionalFields.size > 0 || showField("aliases")) && (
-        <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">Opcionais</p>
-          {optionalFields.has("website") && (
-            <Field label="Site oficial">
-              <input type="text" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://acme.com" className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors" />
-            </Field>
+      <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Opcionais (melhoram a precisão)</p>
+          {hintedFields.size > 0 && (
+            <span className="text-[10px] text-text-muted">
+              recomendados: {Array.from(hintedFields).map((f) => f === "website" ? "Site" : f === "cnpj" ? "CNPJ" : f === "ticker" ? "Ticker" : "Apelidos").join(" · ")}
+            </span>
           )}
-          {optionalFields.has("cnpj") && (
-            <Field label="CNPJ">
-              <input type="text" value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors" />
-            </Field>
-          )}
-          {optionalFields.has("ticker") && (
-            <Field label="Ticker">
-              <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} placeholder="PETR4" className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors" />
-            </Field>
-          )}
-          <Field label="Apelidos / variações" hint="Separados por vírgula">
-            <input type="text" value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Acme Corp, Acme Brasil" className="w-full px-3 py-2.5 rounded-[10px] bg-background border border-border text-[14px] text-text outline-none focus:border-primary transition-colors" />
-          </Field>
         </div>
-      )}
+        <Field label="Site oficial" hint={hintedFields.has("website") ? "recomendado" : undefined}>
+          <input type="text" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://acme.com" className={inputClass} />
+        </Field>
+        <Field label="CNPJ" hint={hintedFields.has("cnpj") ? "recomendado · 14 dígitos" : "14 dígitos"}>
+          <input type="text" value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" className={inputClass} />
+        </Field>
+        <Field label="Ticker" hint={hintedFields.has("ticker") ? "recomendado para empresas listadas" : undefined}>
+          <input type="text" value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} placeholder="PETR4" className={inputClass} />
+        </Field>
+        <Field label="Apelidos / variações" hint="Separados por vírgula">
+          <input type="text" value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="Acme Corp, Acme Brasil" className={inputClass} />
+        </Field>
+      </div>
 
       <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">Filtro de relevância</p>
@@ -704,8 +662,18 @@ function StepResults({
           </Button>
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]">
-          {result.entity.website && <Chip>site: {result.entity.website}</Chip>}
-          {result.entity.cnpj && <Chip>CNPJ: {result.entity.cnpj}</Chip>}
+          {result.entity.website && (
+            <Chip>
+              site: {result.entity.website}
+              {result.discovery?.discovered.includes("website") && <span className="ml-1 text-primary">auto</span>}
+            </Chip>
+          )}
+          {result.entity.cnpj && (
+            <Chip>
+              CNPJ: {result.entity.cnpj}
+              {result.discovery?.discovered.includes("cnpj") && <span className="ml-1 text-primary">auto</span>}
+            </Chip>
+          )}
           {result.entity.ticker && <Chip>ticker: {result.entity.ticker}</Chip>}
           {result.relevance?.strict && <Chip>busca estrita</Chip>}
           {result.relevance?.excludeTerms && result.relevance.excludeTerms.length > 0 && (
@@ -963,8 +931,18 @@ function StepBriefing({
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]">
-          {briefing.entity.website && <Chip>site: {briefing.entity.website}</Chip>}
-          {briefing.entity.cnpj && <Chip>CNPJ: {briefing.entity.cnpj}</Chip>}
+          {briefing.entity.website && (
+            <Chip>
+              site: {briefing.entity.website}
+              {briefing.discovery?.discovered.includes("website") && <span className="ml-1 text-primary">auto</span>}
+            </Chip>
+          )}
+          {briefing.entity.cnpj && (
+            <Chip>
+              CNPJ: {briefing.entity.cnpj}
+              {briefing.discovery?.discovered.includes("cnpj") && <span className="ml-1 text-primary">auto</span>}
+            </Chip>
+          )}
           <Chip>{filledCount}/{briefing.sections.length} seções preenchidas</Chip>
           <Chip>{totalSources} fontes · {(briefing.durationMs / 1000).toFixed(1)}s</Chip>
           <Chip>{briefing.modelUsed}</Chip>
