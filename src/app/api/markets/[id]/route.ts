@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
   }
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["name", "description", "icon", "color", "language", "is_active"]) {
+  for (const k of ["name", "description", "icon", "color", "language", "is_active", "research_modules"]) {
     if (k in body) updates[k] = body[k];
   }
 

@@ -29,6 +29,14 @@ type Source = {
 
 type Subtopic = { id: string; label: string };
 
+type ResearchModuleInfo = {
+  id: string;
+  label: string;
+  description: string;
+  always_on: boolean;
+  providers: { id: string; label: string; description: string | null }[];
+};
+
 type MarketDetail = {
   id: string;
   name: string;
@@ -36,6 +44,7 @@ type MarketDetail = {
   icon: string;
   color: string;
   language: string;
+  research_modules: string[];
   market_subtopics: Subtopic[];
   market_competitors: Competitor[];
   market_sources: Source[];
@@ -44,7 +53,7 @@ type MarketDetail = {
 const EMOJI_OPTIONS = ["📊", "💰", "💳", "📈", "🏦", "🛒", "🚀", "🧠", "🏥", "🏗️", "⚽", "🎮"];
 const COLOR_OPTIONS = ["#007AFF", "#5856D6", "#FF9500", "#34C759", "#FF3B30", "#AF8F3E"];
 
-type TabId = "basics" | "subtopics" | "competitors" | "sources" | "danger";
+type TabId = "basics" | "subtopics" | "competitors" | "sources" | "modules" | "danger";
 
 export default function MarketSettingsPage() {
   const router = useRouter();
@@ -88,6 +97,7 @@ export default function MarketSettingsPage() {
           { id: "subtopics" as TabId, label: "Sub-tópicos" },
           { id: "competitors" as TabId, label: "Concorrentes" },
           { id: "sources" as TabId, label: "Fontes" },
+          { id: "modules" as TabId, label: "Módulos de pesquisa" },
           { id: "danger" as TabId, label: "Excluir" },
         ]).map((t) => (
           <button
@@ -106,6 +116,7 @@ export default function MarketSettingsPage() {
       {tab === "subtopics" && <SubtopicsTab marketId={marketId} subtopics={market.market_subtopics} onChange={load} />}
       {tab === "competitors" && <CompetitorsTab marketId={marketId} marketName={market.name} language={market.language} subtopicsLabels={market.market_subtopics.map(s => s.label)} competitors={market.market_competitors} onChange={load} />}
       {tab === "sources" && <SourcesTab marketId={marketId} marketName={market.name} language={market.language} subtopicsLabels={market.market_subtopics.map(s => s.label)} sources={market.market_sources} onChange={load} />}
+      {tab === "modules" && <ModulesTab marketId={marketId} selected={market.research_modules} onChange={load} />}
       {tab === "danger" && <DangerTab marketId={marketId} marketName={market.name} />}
     </div>
   );
@@ -505,6 +516,111 @@ function SourcesTab({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ModulesTab({ marketId, selected, onChange }: { marketId: string; selected: string[]; onChange: () => void }) {
+  const [modules, setModules] = useState<ResearchModuleInfo[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set(selected));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch("/api/markets/research-modules");
+      if (r.ok) setModules(await r.json());
+    })();
+  }, []);
+
+  function toggle(id: string, alwaysOn: boolean) {
+    if (alwaysOn) return;
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const list = modules.filter((m) => m.always_on || picked.has(m.id)).map((m) => m.id);
+    const r = await fetch(`/api/markets/${marketId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ research_modules: list }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      setError(err.error || `Erro (${r.status})`);
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    onChange();
+  }
+
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <p className="text-[13px] text-text-secondary">
+        Ative os módulos de pesquisa que devem rodar ao gerar um briefing deste market.
+        O núcleo (web + Wikipedia + site + brapi) está sempre ativo. Cada módulo roda providers
+        específicos em paralelo.
+      </p>
+
+      {modules.length === 0 ? (
+        <p className="text-[13px] text-text-muted">Carregando módulos...</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {modules.map((m) => {
+            const isOn = m.always_on || picked.has(m.id);
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={m.always_on}
+                onClick={() => toggle(m.id, m.always_on)}
+                className={`text-left p-3 rounded-[12px] border transition-all ${
+                  isOn
+                    ? "bg-primary/5 border-primary/40"
+                    : "bg-surface border-border hover:border-primary/30"
+                } ${m.always_on ? "opacity-80 cursor-default" : "cursor-pointer"}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[14px] font-semibold">{m.label}</p>
+                      {m.always_on && <span className="text-[10px] text-text-muted bg-surface px-1.5 py-0.5 rounded">sempre ativo</span>}
+                    </div>
+                    <p className="text-[12px] text-text-secondary mt-0.5">{m.description}</p>
+                    {m.providers.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {m.providers.map((p) => (
+                          <span key={p.id} className="text-[10px] text-text-muted bg-background border border-border rounded px-1.5 py-0.5" title={p.description ?? ""}>
+                            {p.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${
+                    isOn ? "bg-primary border-primary" : "border-border"
+                  }`}>
+                    {isOn && <Save className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {error && <p className="text-[12px] text-danger font-medium">{error}</p>}
+
+      <Button onClick={save} loading={saving} className="self-start rounded-full px-5 gap-1.5">
+        <Save className="w-4 h-4" /> Salvar seleção
+      </Button>
     </div>
   );
 }

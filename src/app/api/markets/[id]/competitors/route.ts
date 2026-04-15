@@ -8,7 +8,7 @@ async function assertOwner(supabase: Awaited<ReturnType<typeof createClient>>, u
   return !!data;
 }
 
-type CompetitorInput = { name: string; website?: string | null; aliases?: string[]; ai_suggested?: boolean };
+type CompetitorInput = { name: string; website?: string | null; aliases?: string[]; ai_suggested?: boolean; cnpj?: string | null };
 
 export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
@@ -41,6 +41,7 @@ export async function POST(request: Request, { params }: Params) {
       website: c.website?.trim() || null,
       aliases: Array.isArray(c.aliases) ? c.aliases.map((a) => String(a).trim()).filter(Boolean) : [],
       ai_suggested: !!c.ai_suggested,
+      cnpj: c.cnpj ? String(c.cnpj).replace(/\D+/g, "") : null,
     }));
   if (rows.length === 0) return NextResponse.json({ error: "No competitors" }, { status: 400 });
 
@@ -61,7 +62,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!competitorId) return NextResponse.json({ error: "Missing competitorId" }, { status: 400 });
 
   const allowed: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ["name", "website", "aliases", "logo_url", "enabled"]) {
+  for (const k of ["name", "website", "aliases", "logo_url", "enabled", "cnpj"]) {
     if (k in updates) allowed[k] = updates[k];
   }
 
