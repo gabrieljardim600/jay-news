@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAnthropicClient } from "@/lib/anthropic/client";
+import { extractJson } from "@/lib/anthropic/json-extract";
 import { NextResponse } from "next/server";
 
 type Suggestion = { name: string; url: string; source_type?: "rss" | "web" };
@@ -43,10 +44,14 @@ Sem markdown, sem explicação.`,
       }],
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
-    const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const parsed: Suggestion[] = JSON.parse(jsonText);
-
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    let parsed: Suggestion[] = [];
+    try {
+      parsed = extractJson<Suggestion[]>(text);
+    } catch (parseErr) {
+      console.error("suggest-sources JSON parse failed:", parseErr, "\ntext:", text.slice(0, 500));
+      return NextResponse.json({ suggestions: [], error: "Falha ao interpretar resposta da IA" }, { status: 502 });
+    }
     if (!Array.isArray(parsed)) return NextResponse.json({ suggestions: [] });
 
     const suggestions = parsed

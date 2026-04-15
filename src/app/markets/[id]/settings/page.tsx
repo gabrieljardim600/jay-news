@@ -117,14 +117,26 @@ function BasicsTab({ market, onSaved }: { market: MarketDetail; onSaved: () => v
   const [icon, setIcon] = useState(market.icon);
   const [color, setColor] = useState(market.color);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
+    if (!name.trim()) {
+      setError("Nome é obrigatório");
+      return;
+    }
     setSaving(true);
-    await fetch(`/api/markets/${market.id}`, {
+    setError(null);
+    const res = await fetch(`/api/markets/${market.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description, icon, color }),
+      body: JSON.stringify({ name: name.trim(), description: description.trim() || null, icon, color }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setError(err.error || `Erro ao salvar (${res.status})`);
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onSaved();
   }
@@ -171,6 +183,7 @@ function BasicsTab({ market, onSaved }: { market: MarketDetail; onSaved: () => v
         </div>
       </div>
 
+      {error && <p className="text-[12px] text-danger font-medium">{error}</p>}
       <Button onClick={handleSave} loading={saving} className="self-start rounded-full px-5 gap-1.5">
         <Save className="w-4 h-4" /> Salvar
       </Button>
@@ -181,22 +194,38 @@ function BasicsTab({ market, onSaved }: { market: MarketDetail; onSaved: () => v
 function SubtopicsTab({ marketId, subtopics, onChange }: { marketId: string; subtopics: Subtopic[]; onChange: () => void }) {
   const [labels, setLabels] = useState<string[]>(subtopics.map((s) => s.label));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
     setSaving(true);
-    // Delete all existing then recreate — simplest diff
-    await Promise.all(subtopics.map((s) =>
-      fetch(`/api/markets/${marketId}/subtopics?subtopicId=${s.id}`, { method: "DELETE" })
-    ));
-    if (labels.length > 0) {
-      await fetch(`/api/markets/${marketId}/subtopics`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labels }),
-      });
+    setError(null);
+
+    const existingByLabel = new Map(subtopics.map((s) => [s.label.toLowerCase(), s]));
+    const desired = new Set(labels.map((l) => l.toLowerCase()));
+
+    const toAdd = labels.filter((l) => !existingByLabel.has(l.toLowerCase()));
+    const toRemove = subtopics.filter((s) => !desired.has(s.label.toLowerCase()));
+
+    try {
+      // Add first — if anything fails, user keeps previous subtopics
+      if (toAdd.length > 0) {
+        const r = await fetch(`/api/markets/${marketId}/subtopics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labels: toAdd }),
+        });
+        if (!r.ok) throw new Error(`Não foi possível adicionar: ${(await r.json().catch(() => ({}))).error || r.statusText}`);
+      }
+
+      for (const s of toRemove) {
+        await fetch(`/api/markets/${marketId}/subtopics?subtopicId=${s.id}`, { method: "DELETE" });
+      }
+      onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onChange();
   }
 
   return (
@@ -205,6 +234,7 @@ function SubtopicsTab({ marketId, subtopics, onChange }: { marketId: string; sub
         Sub-tópicos direcionam a relevância das buscas. Não segmentam visualmente o feed.
       </p>
       <ChipInput values={labels} onChange={setLabels} placeholder="day trade, PIX, parcelamento..." />
+      {error && <p className="text-[12px] text-danger font-medium">{error}</p>}
       <Button onClick={handleSave} loading={saving} className="self-start rounded-full px-5 gap-1.5">
         <Save className="w-4 h-4" /> Salvar
       </Button>

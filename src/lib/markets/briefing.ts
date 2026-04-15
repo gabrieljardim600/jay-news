@@ -1,5 +1,6 @@
 import { createClient as createSupabase } from "@supabase/supabase-js";
 import { getAnthropicClient } from "@/lib/anthropic/client";
+import { extractJson } from "@/lib/anthropic/json-extract";
 import { searchTavily } from "@/lib/sources/search";
 
 export type BriefingContent = {
@@ -179,9 +180,8 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text.trim() : "";
-    const jsonText = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    const content: BriefingContent = JSON.parse(jsonText);
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const content = extractJson<BriefingContent>(text);
 
     await svc
       .from("competitor_briefings")

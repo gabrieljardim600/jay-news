@@ -42,28 +42,25 @@ export default function MarketsWizardPage() {
     const market = await marketRes.json();
     const marketId: string = market.id;
 
-    if (subtopics.length > 0) {
-      await fetch(`/api/markets/${marketId}/subtopics`, {
+    const warnings: string[] = [];
+    async function postSub(path: string, body: unknown, label: string) {
+      const r = await fetch(`/api/markets/${marketId}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labels: subtopics }),
+        body: JSON.stringify(body),
       });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        warnings.push(`${label}: ${err.error || r.statusText}`);
+      }
     }
 
-    if (competitors.length > 0) {
-      await fetch(`/api/markets/${marketId}/competitors`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ competitors }),
-      });
-    }
+    if (subtopics.length > 0) await postSub("/subtopics", { labels: subtopics }, "sub-tópicos");
+    if (competitors.length > 0) await postSub("/competitors", { competitors }, "concorrentes");
+    if (sources.length > 0) await postSub("/sources", { sources }, "fontes");
 
-    if (sources.length > 0) {
-      await fetch(`/api/markets/${marketId}/sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sources }),
-      });
+    if (warnings.length > 0) {
+      throw new Error(`Market criado, mas falhou ao salvar: ${warnings.join("; ")}`);
     }
 
     return marketId;
