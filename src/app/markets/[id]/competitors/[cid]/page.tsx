@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, ExternalLink, Globe } from "lucide-react";
 import Image from "next/image";
+import { CompetitorBriefingCard } from "@/components/markets/CompetitorBriefingCard";
 
 type Competitor = {
   id: string;
@@ -102,12 +103,11 @@ export default function CompetitorDetailPage() {
         </div>
       </header>
 
-      <div className="mb-6 p-3 rounded-[10px] bg-primary/5 border border-primary/20">
-        <p className="text-[12px] text-text-secondary">
-          <span className="font-medium text-text">Briefing completo</span> chega na próxima fase — visão
-          geral, pontos fortes/fracos, identidade visual e ameaças competitivas.
-        </p>
-      </div>
+      {marketId && competitorId && (
+        <div className="mb-6">
+          <CompetitorBriefingCard marketId={marketId} competitorId={competitorId} />
+        </div>
+      )}
 
       <section>
         <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3">
