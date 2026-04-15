@@ -83,3 +83,7 @@ export const builtwithProvider: ResearchProvider = {
     } catch { return null; }
   },
 };
+
+// Guard: if we returned from the API but with no usable technologies, the
+// outer runner already stores the null result. The empty-content case is
+// handled by returning null above.

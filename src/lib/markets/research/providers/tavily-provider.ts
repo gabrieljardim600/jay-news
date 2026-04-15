@@ -14,20 +14,29 @@ export const tavilyCoreProvider: ResearchProvider = {
         results: results.map((r) => ({ title: r.title, url: r.url, content: r.content.slice(0, 300) })),
       }));
 
+    // Build a disambiguating suffix: include the website host and one alias
+    // so generic names like "Stone", "Bee" don't drift into unrelated hits.
+    let host: string | null = null;
+    if (competitor.website) {
+      try {
+        host = new URL(competitor.website.startsWith("http") ? competitor.website : `https://${competitor.website}`).hostname.replace(/^www\./, "");
+      } catch {}
+    }
+    const primaryAlias = competitor.aliases.find((a) => a.length >= 3) || null;
+    const disambig = [host, primaryAlias].filter(Boolean).join(" ");
+    const qualifier = disambig ? ` (${disambig})` : "";
+
     const queries = [
-      mk(`${competitor.name} ${market.name} histórico produtos receita`),
-      mk(`${competitor.name} CEO diretoria executiva presidente`),
-      mk(`${competitor.name} vs concorrentes diferencial posicionamento`),
-      mk(`${competitor.name} ações ticker bolsa B3 resultado trimestre`),
-      mk(`${competitor.name} administração diretoria conselho`, [
+      mk(`${competitor.name}${qualifier} ${market.name} histórico produtos receita`),
+      mk(`${competitor.name}${qualifier} CEO diretoria executiva presidente`),
+      mk(`${competitor.name}${qualifier} vs concorrentes diferencial posicionamento`),
+      mk(`${competitor.name}${qualifier} ações ticker bolsa B3 resultado trimestre`),
+      mk(`${competitor.name}${qualifier} administração diretoria conselho`, [
         "cvm.gov.br", "b3.com.br", "br.investing.com", "economatica.com", "valor.globo.com", "infomoney.com.br",
       ]),
     ];
-    if (competitor.website) {
-      try {
-        const host = new URL(competitor.website.startsWith("http") ? competitor.website : `https://${competitor.website}`).hostname.replace(/^www\./, "");
-        queries.push(mk(`${competitor.name} sobre institucional`, [host]));
-      } catch {}
+    if (host) {
+      queries.push(mk(`${competitor.name} sobre institucional`, [host]));
     }
 
     const buckets = await Promise.allSettled(queries);

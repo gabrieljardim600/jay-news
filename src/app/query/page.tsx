@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
-import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink, Sparkles, SlidersHorizontal, Settings2 } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink, Sparkles, SlidersHorizontal, Settings2, Copy, CheckCheck, FileDown, ListTree } from "lucide-react";
 
 type EntityField = "name" | "website" | "cnpj" | "ticker" | "aliases";
 
@@ -189,6 +189,9 @@ export default function QueryPage() {
       const excl = excludeTerms.split(",").map((s) => s.trim()).filter(Boolean);
 
       if (mode === "profile" && profileId) {
+        // Jump to step 3 first so the loading shell is visible while Claude runs.
+        setBriefing(null);
+        setStep(3);
         const res = await fetch("/api/query/briefing", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -201,6 +204,7 @@ export default function QueryPage() {
         const data: BriefingResponse = await res.json();
         setBriefing(data);
         setResult(null);
+        return; // already on step 3
       } else {
         const res = await fetch("/api/query", {
           method: "POST",
@@ -224,6 +228,7 @@ export default function QueryPage() {
       setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao executar consulta");
+      if (mode === "profile") setStep(2); // back from the loading shell
     } finally {
       setRunning(false);
     }
@@ -284,7 +289,14 @@ export default function QueryPage() {
         />
       )}
 
-      {step === 3 && briefing && (
+      {step === 3 && running && mode === "profile" && (
+        <BriefingLoading
+          profileLabel={profiles.find((p) => p.id === profileId)?.label ?? ""}
+          moduleCount={selected.size}
+        />
+      )}
+
+      {step === 3 && !running && briefing && (
         <StepBriefing
           briefing={briefing}
           onBack={() => setStep(2)}
@@ -398,6 +410,10 @@ function StepOne({
           )}
           {profiles.map((p) => {
             const isSelected = profileId === p.id;
+            const moduleLabels = p.module_ids
+              .map((id) => modules.find((m) => m.id === id)?.label ?? id)
+              .slice(0, 4);
+            const extra = p.module_ids.length - moduleLabels.length;
             return (
               <button
                 key={p.id}
@@ -417,12 +433,23 @@ function StepOne({
                 {p.description && (
                   <p className="text-[12px] text-text-muted leading-snug mb-2">{p.description}</p>
                 )}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px] text-text-muted">{p.module_ids.length} módulos</span>
-                  <span className="text-[10px] text-text-muted">{p.output_sections.length} seções</span>
-                  {p.is_builtin && (
-                    <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-background text-text-secondary">padrão</span>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {moduleLabels.map((label) => (
+                    <span key={label} className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-background text-text-secondary">
+                      {label}
+                    </span>
+                  ))}
+                  {extra > 0 && (
+                    <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-background text-text-muted">
+                      +{extra}
+                    </span>
                   )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-text-muted">
+                  <span>{p.module_ids.length} módulos</span>
+                  <span>·</span>
+                  <span>{p.output_sections.length} seções</span>
+                  {p.is_builtin && <><span>·</span><span>padrão</span></>}
                 </div>
               </button>
             );
@@ -800,6 +827,69 @@ function Chip({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BriefingLoading({ profileLabel, moduleCount }: { profileLabel: string; moduleCount: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(t);
+  }, []);
+  const phases = [
+    { from: 0, label: "Coletando fontes de pesquisa…" },
+    { from: 15, label: "Agregando provedores e filtrando relevância…" },
+    { from: 35, label: "Sintetizando com Claude…" },
+    { from: 70, label: "Finalizando — gere uma coisa grande leva mais tempo…" },
+  ];
+  const current = [...phases].reverse().find((p) => elapsed >= p.from) ?? phases[0];
+  return (
+    <div className="py-12 flex flex-col items-center text-center">
+      <div className="w-12 h-12 mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      </div>
+      <p className="text-[15px] font-semibold mb-1">Gerando briefing · {profileLabel}</p>
+      <p className="text-[12px] text-text-muted mb-4">{moduleCount} módulos · ~60s típico</p>
+      <div className="w-full max-w-sm">
+        <div className="h-1.5 rounded-full bg-surface overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-500 ease-out"
+            style={{ width: `${Math.min(95, Math.round((elapsed / 75) * 100))}%` }}
+          />
+        </div>
+        <p className="text-[11px] text-text-muted mt-2">{current.label} <span className="text-text-muted/70">({elapsed}s)</span></p>
+      </div>
+    </div>
+  );
+}
+
+function briefingToMarkdown(b: BriefingResponse): string {
+  const lines: string[] = [];
+  lines.push(`# ${b.entity.name} — ${b.profile.label}`);
+  if (b.entity.website) lines.push(`Site: ${b.entity.website}`);
+  if (b.entity.cnpj) lines.push(`CNPJ: ${b.entity.cnpj}`);
+  lines.push(`Modelo: ${b.modelUsed} · ${(b.durationMs / 1000).toFixed(1)}s`);
+  lines.push("");
+  for (const sec of b.sections) {
+    const v = b.content[sec.id];
+    const empty = v == null || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v ?? {}).length === 0) || v === "";
+    lines.push(`## ${sec.title}`);
+    if (empty) {
+      lines.push("_não encontrado_\n");
+      continue;
+    }
+    if (sec.kind === "paragraph") {
+      lines.push(String(v));
+    } else if (sec.kind === "list") {
+      for (const it of v as unknown[]) lines.push(`- ${typeof it === "string" ? it : JSON.stringify(it)}`);
+    } else {
+      for (const [k, vv] of Object.entries(v as Record<string, unknown>)) {
+        lines.push(`- **${k}**: ${typeof vv === "string" ? vv : JSON.stringify(vv)}`);
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
 function StepBriefing({
   briefing, onBack, onReset, onRefresh, refreshing,
 }: {
@@ -809,13 +899,41 @@ function StepBriefing({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
   const totalSources = briefing.modules.reduce(
     (s, m) => s + m.blocks.reduce((bb, b) => bb + (b.items?.length ?? 1), 0),
     0,
   );
+  const sectionStats = briefing.sections.map((sec) => {
+    const v = briefing.content[sec.id];
+    const empty = v == null || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v ?? {}).length === 0) || v === "";
+    return { sec, empty };
+  });
+  const filledCount = sectionStats.filter((s) => !s.empty).length;
+
+  async function copyMarkdown() {
+    await navigator.clipboard.writeText(briefingToMarkdown(briefing));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+  function downloadMarkdown() {
+    const md = briefingToMarkdown(briefing);
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = briefing.entity.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    a.href = url;
+    a.download = `briefing-${safeName}-${briefing.profile.slug}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  function scrollTo(id: string) {
+    document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div>
-      <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
+      <div className="p-4 rounded-[14px] border border-border bg-surface mb-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
@@ -823,28 +941,75 @@ function StepBriefing({
             </p>
             <p className="text-[18px] font-semibold truncate">{briefing.entity.name}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={onRefresh} loading={refreshing} className="rounded-full shrink-0">
-            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
-          </Button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={copyMarkdown}
+              className="h-8 px-2.5 flex items-center gap-1 rounded-full text-[11px] border border-border bg-background text-text-secondary hover:text-text hover:border-text-muted/50 transition-colors"
+              title="Copiar como markdown"
+            >
+              {copied ? <CheckCheck className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              {copied ? "copiado" : "copiar"}
+            </button>
+            <button
+              onClick={downloadMarkdown}
+              className="h-8 px-2.5 flex items-center gap-1 rounded-full text-[11px] border border-border bg-background text-text-secondary hover:text-text hover:border-text-muted/50 transition-colors"
+              title="Baixar .md"
+            >
+              <FileDown className="w-3 h-3" /> .md
+            </button>
+            <Button variant="outline" size="sm" onClick={onRefresh} loading={refreshing} className="rounded-full">
+              <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 text-[11px]">
           {briefing.entity.website && <Chip>site: {briefing.entity.website}</Chip>}
           {briefing.entity.cnpj && <Chip>CNPJ: {briefing.entity.cnpj}</Chip>}
-          <Chip>{briefing.sections.length} seções · {totalSources} fontes · {(briefing.durationMs / 1000).toFixed(1)}s</Chip>
+          <Chip>{filledCount}/{briefing.sections.length} seções preenchidas</Chip>
+          <Chip>{totalSources} fontes · {(briefing.durationMs / 1000).toFixed(1)}s</Chip>
           <Chip>{briefing.modelUsed}</Chip>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 mb-6">
-        {briefing.sections.map((sec) => (
-          <SectionCard key={sec.id} section={sec} value={briefing.content[sec.id]} />
-        ))}
+      <div className="flex flex-col lg:flex-row gap-4 mb-6">
+        {/* TOC */}
+        <nav className="lg:w-[200px] shrink-0 lg:sticky lg:top-4 self-start">
+          <div className="p-3 rounded-[14px] border border-border bg-surface">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+              <ListTree className="w-3 h-3" /> Seções
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {sectionStats.map(({ sec, empty }) => (
+                <li key={sec.id}>
+                  <button
+                    onClick={() => scrollTo(sec.id)}
+                    className={`w-full text-left text-[12px] px-2 py-1 rounded-md hover:bg-background transition-colors flex items-center justify-between gap-2 ${
+                      empty ? "text-text-muted" : "text-text"
+                    }`}
+                  >
+                    <span className="truncate">{sec.title}</span>
+                    {empty && <span className="text-[9px] text-text-muted shrink-0">—</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </nav>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          {briefing.sections.map((sec) => (
+            <div id={`sec-${sec.id}`} key={sec.id} className="scroll-mt-4">
+              <SectionCard section={sec} value={briefing.content[sec.id]} />
+            </div>
+          ))}
+        </div>
       </div>
 
       <details className="mb-5 rounded-[14px] border border-border bg-surface">
         <summary className="px-4 py-3 cursor-pointer text-[13px] font-semibold list-none flex items-center justify-between">
           <span>Dados de pesquisa brutos</span>
-          <span className="text-[11px] text-text-muted">{briefing.modules.length} módulos</span>
+          <span className="text-[11px] text-text-muted">{briefing.modules.length} módulos · {totalSources} itens</span>
         </summary>
         <div className="border-t border-border divide-y divide-border">
           {briefing.modules.map((m) => (
@@ -877,24 +1042,33 @@ function StepBriefing({
 
 function SectionCard({ section, value }: { section: OutputSection; value: unknown }) {
   const empty = value == null || (Array.isArray(value) && value.length === 0) || (typeof value === "object" && !Array.isArray(value) && Object.keys(value ?? {}).length === 0) || value === "";
+  const count = section.kind === "list" && Array.isArray(value) ? value.length
+    : section.kind === "keyvalue" && value && typeof value === "object" ? Object.keys(value as object).length
+    : null;
   return (
-    <div className="p-4 rounded-[14px] border border-border bg-surface">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">{section.title}</p>
+    <section className={`p-4 rounded-[14px] border ${empty ? "border-border/60 bg-surface/40" : "border-border bg-surface"}`}>
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <h3 className="text-[13px] font-semibold tracking-tight">{section.title}</h3>
+        {count !== null && !empty && (
+          <span className="text-[10px] text-text-muted">{count} {section.kind === "list" ? (count === 1 ? "item" : "itens") : (count === 1 ? "campo" : "campos")}</span>
+        )}
+        {empty && <span className="text-[10px] text-text-muted uppercase tracking-wide">vazio</span>}
+      </div>
       {empty ? (
-        <p className="text-[12px] text-text-muted italic">não encontrado</p>
+        <p className="text-[12px] text-text-muted">Nenhum dado encontrado para essa seção. Tente afrouxar a busca estrita ou rodar com <em>Atualizar</em>.</p>
       ) : section.kind === "paragraph" ? (
-        <p className="text-[13px] text-text leading-relaxed whitespace-pre-wrap">{String(value)}</p>
+        <p className="text-[13.5px] text-text leading-relaxed whitespace-pre-wrap">{String(value)}</p>
       ) : section.kind === "list" ? (
         <ul className="flex flex-col gap-1.5 text-[13px]">
           {(value as unknown[]).map((item, i) => (
             <li key={i} className="flex gap-2">
-              <span className="text-primary font-semibold shrink-0">·</span>
+              <span className="text-primary font-semibold shrink-0 leading-snug">·</span>
               <span className="text-text leading-snug">{typeof item === "string" ? item : JSON.stringify(item)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <dl className="grid grid-cols-[minmax(120px,max-content)_1fr] gap-x-3 gap-y-1 text-[13px]">
+        <dl className="grid grid-cols-[minmax(130px,max-content)_1fr] gap-x-3 gap-y-1 text-[13px]">
           {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-text-muted font-medium">{k}</dt>
@@ -903,6 +1077,6 @@ function SectionCard({ section, value }: { section: OutputSection; value: unknow
           ))}
         </dl>
       )}
-    </div>
+    </section>
   );
 }

@@ -323,18 +323,23 @@ export function CompetitorBriefingCard({ marketId, competitorId }: Props) {
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <select
-            value={profileId}
-            onChange={(e) => setProfileId(e.target.value)}
-            disabled={generating}
-            className="h-8 px-2.5 rounded-full text-[11px] bg-background border border-border text-text outline-none focus:border-primary transition-colors"
-            title="Perfil de briefing"
-          >
-            <option value="">Completo</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value)}
+              disabled={generating}
+              className="appearance-none h-8 pl-2.5 pr-7 rounded-full text-[11px] bg-background border border-border text-text outline-none focus:border-primary hover:border-text-muted/50 transition-colors cursor-pointer"
+              title={profileId ? "Perfil focado — módulos reduzidos, output específico" : "Briefing completo — todos os campos padrão"}
+            >
+              <option value="">◎ Completo</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>◉ {p.label}</option>
+              ))}
+            </select>
+            <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted pointer-events-none" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
           <button
             onClick={handleGenerate}
             disabled={generating}

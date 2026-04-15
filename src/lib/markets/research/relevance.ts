@@ -76,24 +76,51 @@ export type RelevanceOptions = {
   strict: boolean;           // when false, only excludeTerms applied
 };
 
-/** Apply relevance rules to items. Returns the kept items. */
+/** Build a case-insensitive word-boundary regex for a term. Multi-word terms
+ *  match as a phrase with flexible whitespace. Handles diacritics by normalizing. */
+function termRegex(term: string): RegExp {
+  const normalized = norm(term);
+  // Escape regex specials
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, "i");
+}
+
+/** Apply relevance rules to items. Returns the kept items.
+ *  Matching rules (strict mode):
+ *  - Drop if any excludeTerm matches (substring, normalized).
+ *  - Keep if the URL host matches one of domainAllow.
+ *  - Otherwise require at least one requireTerm to appear as a *word* — this
+ *    prevents matches like "Emma Stone" for an entity named "Stone". */
 export function filterItems(items: ParsedItem[], opts: RelevanceOptions): ParsedItem[] {
-  const req = opts.requireTerms.map(norm).filter((t) => t.length >= 2);
   const bad = opts.excludeTerms.map(norm).filter((t) => t.length >= 2);
+  const reqTerms = opts.requireTerms.map((t) => t.trim()).filter((t) => t.length >= 2);
+  const reqRegex = reqTerms.map(termRegex);
   const allow = (opts.domainAllow || []).map((d) => d.toLowerCase());
+
+  // Tight mode kicks in when the primary term is short enough to collide
+  // with common English words (Stone, Bee, Apple, Dock). In that case we
+  // require ≥2 distinct requireTerm matches for off-domain items — this
+  // forces an alias, ticker, or URL fragment to co-occur with the name.
+  const shortestTerm = reqTerms.reduce((min, t) => Math.min(min, t.replace(/\W/g, "").length), Infinity);
+  const tight = reqTerms.length >= 2 && shortestTerm <= 6;
 
   return items.filter((it) => {
     const blob = norm([it.title, it.snippet, it.url, it.source].filter(Boolean).join(" "));
     if (bad.some((t) => blob.includes(t))) return false;
     if (!opts.strict) return true;
+
+    let onAllowedDomain = false;
     if (allow.length && it.url) {
       try {
         const host = new URL(it.url).hostname.toLowerCase();
-        if (allow.some((d) => host.includes(d))) return true;
+        if (allow.some((d) => host.includes(d))) onAllowedDomain = true;
       } catch {}
     }
-    if (req.length === 0) return true;
-    return req.some((t) => blob.includes(t));
+    if (onAllowedDomain) return true;
+
+    if (reqRegex.length === 0) return true;
+    const matchCount = reqRegex.reduce((n, re) => n + (re.test(blob) ? 1 : 0), 0);
+    return tight ? matchCount >= 2 : matchCount >= 1;
   });
 }
 
