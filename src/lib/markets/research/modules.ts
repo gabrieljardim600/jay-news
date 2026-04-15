@@ -21,7 +21,15 @@ import {
   consumidorGovProvider, jusBrasilProvider, douProvider, proconSpProvider,
   crunchbaseBasicProvider, tracxnProvider, startupBaseProvider,
   linkedinPublicProvider, tiktokCreativeProvider, glassdoorProvider,
+  productHuntProvider, googleAdsTransparencyProvider, linkedinAdLibraryProvider,
+  anatelHomologacaoProvider, jucespProvider, cvmRiProvider, googleTrendsProvider,
+  appFollowProvider, sensorTowerProvider, dataAiProvider,
 } from "./providers/tavily-targeted";
+import {
+  crtShProvider, hnAlgoliaProvider, redditProvider, waybackCdxProvider,
+  sitemapRobotsProvider, portalTransparenciaProvider, youtubeDataProvider,
+  pageSpeedProvider, productPathsProvider, minhaReceitaProvider,
+} from "./providers/real-extras";
 
 export const MODULES: ResearchModule[] = [
   {
@@ -35,16 +43,23 @@ export const MODULES: ResearchModule[] = [
   {
     id: "corporate-registry",
     label: "Registro corporativo",
-    description: "BrasilAPI (CNPJ, QSA, capital, CNAE) e registro BACEN (IFs e IPs).",
+    description: "BrasilAPI, Receita Federal (minhareceita), BACEN, Juntas Comerciais.",
     icon: "FileText",
-    providers: [brasilApiCnpjProvider, bacenIfProvider],
+    providers: [brasilApiCnpjProvider, minhaReceitaProvider, bacenIfProvider, jucespProvider],
   },
   {
     id: "financial-public",
     label: "Financeiro (empresa aberta)",
-    description: "CVM — Formulário de Referência (composição de diretoria).",
+    description: "CVM — FRE e Fatos/Apresentações (RI).",
     icon: "TrendingUp",
-    providers: [cvmFreProvider],
+    providers: [cvmFreProvider, cvmRiProvider],
+  },
+  {
+    id: "gov-contracts",
+    label: "Contratos governo",
+    description: "Portal da Transparência — contratos federais por CNPJ.",
+    icon: "Landmark",
+    providers: [portalTransparenciaProvider],
   },
   {
     id: "leadership",
@@ -56,23 +71,23 @@ export const MODULES: ResearchModule[] = [
   {
     id: "ip",
     label: "Propriedade intelectual",
-    description: "Patentes no INPI (BR) e Google Patents.",
+    description: "Patentes no INPI (BR), Google Patents e homologação ANATEL.",
     icon: "Lightbulb",
-    providers: [patentsProvider],
+    providers: [patentsProvider, anatelHomologacaoProvider],
   },
   {
     id: "paid-marketing",
     label: "Marketing pago",
-    description: "Meta Ad Library (Graph API) e TikTok Creative Center.",
+    description: "Meta, TikTok, Google Ads Transparency e LinkedIn Ad Library.",
     icon: "Megaphone",
-    providers: [metaAdLibraryProvider, tiktokCreativeProvider],
+    providers: [metaAdLibraryProvider, tiktokCreativeProvider, googleAdsTransparencyProvider, linkedinAdLibraryProvider],
   },
   {
     id: "mobile",
     label: "Apps mobile",
-    description: "Rating, reviews e changelog no Google Play e App Store.",
+    description: "Play/App Store + AppFollow, Sensor Tower e data.ai.",
     icon: "Smartphone",
-    providers: [playStoreProvider, appStoreProvider],
+    providers: [playStoreProvider, appStoreProvider, appFollowProvider, sensorTowerProvider, dataAiProvider],
   },
   {
     id: "reputation",
@@ -103,11 +118,32 @@ export const MODULES: ResearchModule[] = [
     providers: [googleNewsRssProvider, gdeltProvider],
   },
   {
+    id: "social-voice",
+    label: "Voz orgânica",
+    description: "Reddit, Hacker News, YouTube e Product Hunt — discussões e reviews.",
+    icon: "MessageSquare",
+    providers: [redditProvider, hnAlgoliaProvider, youtubeDataProvider, productHuntProvider],
+  },
+  {
+    id: "trends",
+    label: "Demanda & tendências",
+    description: "Google Trends — interesse ao longo do tempo e termos correlatos.",
+    icon: "TrendingUp",
+    providers: [googleTrendsProvider],
+  },
+  {
+    id: "web-footprint",
+    label: "Pegada web",
+    description: "crt.sh, sitemap/robots, rotas de produto, histórico Wayback e CrUX.",
+    icon: "Globe",
+    providers: [crtShProvider, sitemapRobotsProvider, productPathsProvider, waybackCdxProvider, pageSpeedProvider],
+  },
+  {
     id: "infra",
     label: "Infraestrutura & segurança",
-    description: "Shodan e SecurityTrails — footprint técnico exposto.",
+    description: "Shodan, SecurityTrails e crt.sh — footprint técnico exposto.",
     icon: "Server",
-    providers: [shodanProvider, securityTrailsProvider],
+    providers: [shodanProvider, securityTrailsProvider, crtShProvider],
   },
 ];
 

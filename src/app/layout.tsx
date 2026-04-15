@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Sora, Inter } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "./providers";
+import { PWARegister } from "./pwa-register";
 
 const sora = Sora({
   subsets: ["latin"],
@@ -16,8 +17,29 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "JNews - AI News Digest",
-  description: "Personalized AI-powered news digest",
+  title: "JNews — AI News Digest",
+  description: "Briefings de inteligência e digest personalizado de notícias por IA.",
+  applicationName: "JNews",
+  appleWebApp: {
+    capable: true,
+    title: "JNews",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/icon.svg" }],
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2ece1" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0d" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -36,6 +58,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <Providers>{children}</Providers>
+        <PWARegister />
       </body>
     </html>
   );

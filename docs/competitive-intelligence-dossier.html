@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dossiê · Inteligência Competitiva — Arsenal de Fontes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b0b0d;
+    --ink-2:#141419;
+    --ink-3:#1c1c22;
+    --paper:#f2ece1;
+    --paper-dim:#d9d2c4;
+    --rule:#2a2a31;
+    --gold:#c9a35d;
+    --gold-hi:#e5c27e;
+    --red:#c7443b;
+    --green:#7aa87a;
+    --blue:#6c8cb3;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --sans: "Manrope", system-ui, sans-serif;
+    --serif: "Fraunces", serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--paper);font-family:var(--sans);font-weight:400;line-height:1.55;-webkit-font-smoothing:antialiased}
+  body{
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(201,163,93,.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(108,140,179,.06), transparent 60%),
+      var(--ink);
+    background-attachment: fixed;
+  }
+  a{color:var(--gold-hi);text-decoration:none;border-bottom:1px dotted rgba(229,194,126,.4)}
+  a:hover{color:#fff;border-bottom-color:#fff}
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    border-bottom:1px solid var(--rule);
+    padding:28px clamp(18px,4vw,56px) 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  .masthead::before{
+    content:"CONFIDENTIAL · NOT FOR DISTRIBUTION · NOT FOR DISTRIBUTION · CONFIDENTIAL · ";
+    position:absolute;inset:auto 0 4px 0;
+    white-space:nowrap;font-family:var(--mono);font-size:10px;letter-spacing:.3em;
+    color:rgba(242,236,225,.08);
+    animation:slide 60s linear infinite;
+  }
+  @keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .masthead-grid{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+  .title{
+    font-family:var(--serif);font-weight:400;font-style:italic;
+    font-size:clamp(38px, 6vw, 76px);line-height:.95;margin:0;letter-spacing:-.02em;
+    color:var(--paper);
+  }
+  .title em{font-style:normal;font-weight:600;color:var(--gold-hi)}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--paper-dim);letter-spacing:.08em;text-align:right}
+  .meta b{color:var(--paper)}
+
+  /* ---------- nav ---------- */
+  nav.tabs{
+    display:flex;flex-wrap:wrap;gap:2px;
+    padding:0 clamp(10px,3vw,48px);
+    background:var(--ink-2);
+    border-bottom:1px solid var(--rule);
+    position:sticky;top:0;z-index:10;
+    backdrop-filter:blur(6px);
+  }
+  .tab{
+    background:transparent;border:0;color:var(--paper-dim);
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    padding:16px 14px;cursor:pointer;border-bottom:2px solid transparent;
+    transition:color .15s, border-color .15s, background .15s;
+  }
+  .tab:hover{color:var(--paper);background:rgba(255,255,255,.02)}
+  .tab[aria-selected="true"]{color:var(--gold-hi);border-bottom-color:var(--gold)}
+  .tab-num{color:var(--gold);margin-right:6px;opacity:.7}
+
+  /* ---------- layout ---------- */
+  main{max-width:1320px;margin:0 auto;padding:clamp(22px,4vw,56px)}
+  section.panel{display:none;animation:fade .3s ease}
+  section.panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  h2.section-title{
+    font-family:var(--serif);font-weight:300;font-size:clamp(28px,3.6vw,46px);
+    line-height:1;letter-spacing:-.01em;margin:0 0 6px;
+  }
+  h2.section-title em{font-style:italic;color:var(--gold-hi)}
+  .dek{max-width:780px;color:var(--paper-dim);font-size:16px;margin:0 0 32px;border-left:2px solid var(--gold);padding-left:14px}
+
+  h3.group{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--gold);margin:34px 0 14px;
+    display:flex;align-items:center;gap:14px;
+  }
+  h3.group::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--rule),transparent)}
+
+  /* ---------- source cards ---------- */
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .card{
+    background:linear-gradient(180deg, var(--ink-2), var(--ink-3));
+    border:1px solid var(--rule);border-radius:2px;
+    padding:18px 18px 16px;position:relative;overflow:hidden;
+    transition:border-color .2s, transform .2s;
+  }
+  .card:hover{border-color:var(--gold);transform:translateY(-2px)}
+  .card::before{
+    content:"";position:absolute;left:0;top:0;width:3px;height:100%;
+    background:var(--gold);transform:scaleY(0);transform-origin:top;transition:transform .25s;
+  }
+  .card:hover::before{transform:scaleY(1)}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+  .card-name{
+    font-family:var(--serif);font-weight:500;font-size:20px;letter-spacing:-.01em;color:var(--paper);
+  }
+  .tag{
+    font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+    padding:3px 7px;border:1px solid var(--rule);color:var(--paper-dim);border-radius:2px;white-space:nowrap;
+  }
+  .tag.paid{border-color:var(--red);color:var(--red)}
+  .tag.free{border-color:var(--green);color:var(--green)}
+  .tag.mixed{border-color:var(--gold);color:var(--gold)}
+  .card-desc{font-size:13.5px;color:var(--paper-dim);margin:8px 0 10px}
+  .card dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12px}
+  .card dt{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);padding-top:3px}
+  .card dd{margin:0;color:var(--paper)}
+  .card dd code{font-family:var(--mono);font-size:11.5px;background:rgba(255,255,255,.04);padding:1px 5px;border-radius:2px;color:var(--gold-hi)}
+
+  /* ---------- spec tables ---------- */
+  table.spec{width:100%;border-collapse:collapse;margin:12px 0 6px;font-size:13px}
+  table.spec th, table.spec td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+  table.spec th{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:500;background:rgba(255,255,255,.02)}
+  table.spec tr:hover td{background:rgba(201,163,93,.04)}
+  table.spec code{font-family:var(--mono);font-size:11.5px;color:var(--gold-hi)}
+
+  /* ---------- callout ---------- */
+  .callout{
+    border:1px solid var(--rule);border-left:3px solid var(--gold);
+    padding:18px 20px;background:rgba(201,163,93,.04);margin:18px 0;border-radius:2px;
+  }
+  .callout h4{font-family:var(--serif);font-style:italic;font-weight:400;font-size:20px;margin:0 0 6px;color:var(--gold-hi)}
+  .callout p{margin:4px 0;font-size:14px}
+
+  /* ---------- pipeline steps ---------- */
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  ol.steps li{
+    counter-increment:s;position:relative;
+    padding:18px 18px 16px 54px;border:1px solid var(--rule);background:var(--ink-2);border-radius:2px;
+  }
+  ol.steps li::before{
+    content:counter(s,decimal-leading-zero);
+    position:absolute;left:14px;top:14px;
+    font-family:var(--serif);font-style:italic;font-size:28px;color:var(--gold);line-height:1;
+  }
+  ol.steps b{display:block;font-family:var(--serif);font-size:17px;margin-bottom:4px;color:var(--paper)}
+  ol.steps span{font-size:13px;color:var(--paper-dim)}
+
+  /* ---------- example block ---------- */
+  .example{
+    background:#000;border:1px solid var(--rule);padding:14px 16px;border-radius:2px;
+    font-family:var(--mono);font-size:12px;color:var(--paper-dim);white-space:pre-wrap;overflow:auto;
+    margin:8px 0 4px;
+  }
+  .example .k{color:var(--gold)}
+  .example .s{color:#9fbf9f}
+  .example .n{color:#e7a77e}
+  .example .c{color:#6a6a70;font-style:italic}
+
+  /* ---------- matrix ---------- */
+  .matrix{overflow:auto;border:1px solid var(--rule);border-radius:2px;margin:12px 0}
+  .matrix table{width:100%;min-width:720px;border-collapse:collapse;font-size:12.5px}
+  .matrix th, .matrix td{padding:10px 12px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);vertical-align:top}
+  .matrix th{background:var(--ink-3);font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+  .matrix td:first-child{font-family:var(--serif);font-size:14px;color:var(--paper)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .d-hi{background:var(--green)}.d-mid{background:var(--gold)}.d-lo{background:var(--red)}
+
+  /* ---------- cielo section ---------- */
+  .split{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+  .cadence{
+    border:1px dashed var(--rule);padding:16px;border-radius:2px;background:rgba(255,255,255,.015);
+  }
+  .cadence h5{font-family:var(--mono);font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+  .cadence ul{padding-left:18px;margin:0;font-size:13px}
+  .cadence li{margin:4px 0}
+
+  /* ---------- schema viz ---------- */
+  .schema{font-family:var(--mono);font-size:12.5px;background:#000;border:1px solid var(--rule);padding:18px;border-radius:2px;overflow:auto;color:var(--paper-dim);white-space:pre}
+  .schema .t{color:var(--gold-hi)}
+  .schema .f{color:var(--paper)}
+  .schema .c{color:#6a6a70}
+
+  footer{border-top:1px solid var(--rule);padding:24px clamp(18px,4vw,56px);font-family:var(--mono);font-size:10px;color:var(--paper-dim);letter-spacing:.2em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  @media (max-width:640px){
+    .masthead-grid{grid-template-columns:1fr}
+    .meta{text-align:left}
+    .tab{padding:12px 10px}
+  }
+
+  /* print */
+  @media print{
+    body{background:#fff;color:#000}
+    nav.tabs{display:none}
+    section.panel{display:block !important;page-break-after:always}
+    .card{background:#fff;color:#000;border-color:#ccc}
+    .card-name{color:#000}
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-grid">
+    <div>
+      <p class="kicker">Dossiê Nº 001 · Competitive Intelligence Arsenal</p>
+      <h1 class="title">O arsenal de <em>fontes</em><br/>para caçar concorrentes.</h1>
+    </div>
+    <div class="meta">
+      <div>VOL. I · ED. 2026-04</div>
+      <div>JAY-NEWS / MARKETS</div>
+      <div>AUTHOR · <b>G. JARDIM</b></div>
+      <div>CLASS · <b>INTERNAL</b></div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" id="tabs">
+  <button class="tab" role="tab" data-panel="p0" aria-selected="true"><span class="tab-num">00</span>Sumário</button>
+  <button class="tab" role="tab" data-panel="p1"><span class="tab-num">01</span>Stack &amp; Produto</button>
+  <button class="tab" role="tab" data-panel="p2"><span class="tab-num">02</span>Tráfego &amp; SEO</button>
+  <button class="tab" role="tab" data-panel="p3"><span class="tab-num">03</span>Reviews &amp; Voz</button>
+  <button class="tab" role="tab" data-panel="p4"><span class="tab-num">04</span>Financeiro &amp; Ops</button>
+  <button class="tab" role="tab" data-panel="p5"><span class="tab-num">05</span>Marketing &amp; GTM</button>
+  <button class="tab" role="tab" data-panel="p6"><span class="tab-num">06</span>Já integradas</button>
+  <button class="tab" role="tab" data-panel="p7"><span class="tab-num">07</span>Catálogo Cielo-style</button>
+  <button class="tab" role="tab" data-panel="p8"><span class="tab-num">08</span>Taxas &amp; Preços</button>
+  <button class="tab" role="tab" data-panel="p9"><span class="tab-num">09</span>Síntese &amp; Pipeline</button>
+</nav>
+
+<main>
+
+<!-- =========================================================== -->
+<section class="panel active" id="p0">
+  <h2 class="section-title">Sumário <em>executivo</em></h2>
+  <p class="dek">Este documento consolida o arsenal de APIs, bancos públicos e ferramentas para construir dossiês vivos de concorrentes — dos bits de tecnologia até a tabela de taxas em PDF. Organizado em 5 camadas de coleta + 2 camadas de análise (catálogo de produtos e comparativo de preços) + 1 pipeline de síntese com LLM.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">5 camadas</span><span class="tag">coleta</span></div>
+      <p class="card-desc">Stack, tráfego, reviews, financeiro/ops e marketing. Cada concorrente é um vetor nessas 5 dimensões.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">~40 fontes</span><span class="tag">arsenal</span></div>
+      <p class="card-desc">APIs oficiais, bancos regulatórios, scrapers direcionados e agregadores de terceiros — mix de grátis e pago.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Diff temporal</span><span class="tag">valor</span></div>
+      <p class="card-desc">O sinal real está no delta: novo produto, mudança de taxa, contratação em massa, stack trocada, processo aberto.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Síntese LLM</span><span class="tag">saída</span></div>
+      <p class="card-desc">Fatos atômicos com citação → schema canônico → reducer com prompt caching → SWOT com evidência obrigatória.</p>
+    </div>
+  </div>
+
+  <h3 class="group">Como ler este dossiê</h3>
+  <table class="spec">
+    <thead><tr><th>Aba</th><th>O que cobre</th><th>Quando usar</th></tr></thead>
+    <tbody>
+      <tr><td><code>01–05</code></td><td>Novas fontes a integrar, por dimensão de análise</td><td>Quando tiver lacuna de dado em alguma camada</td></tr>
+      <tr><td><code>06</code></td><td>Providers que já existem no repo <code>jay-news</code></td><td>Para saber o que já está coberto</td></tr>
+      <tr><td><code>07</code></td><td>Estratégia para catálogo vivo de produtos (Cielo-style)</td><td>Para mapear features/maquininhas/app e changelog histórico</td></tr>
+      <tr><td><code>08</code></td><td>Como extrair e comparar tabelas de taxas e planos</td><td>Para análise de pricing competitivo</td></tr>
+      <tr><td><code>09</code></td><td>Arquitetura do pipeline de síntese</td><td>Para transformar coleta em insight acionável</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <h4>Princípio norteador</h4>
+    <p>Volume de fontes sem schema canônico vira ruído. Toda evidência deve ser um <b>fato atômico tipado</b> (fact, provider, url, snippet, timestamp). Sem isso, o LLM alucina e o dossiê apodrece em semanas.</p>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p1">
+  <h2 class="section-title">Stack &amp; <em>Produto</em></h2>
+  <p class="dek">Como a empresa é feita por dentro: tecnologias, integrações, estrutura do próprio produto. Revela maturidade de engenharia, parceiros e áreas restritas.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">BuiltWith</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Perfil tecnológico de qualquer domínio: CMS, analytics, pagamento, CDN, A/B test, CRM, pixels de mídia.</p>
+      <dl>
+        <dt>Puxa</dt><dd>Lista de tecnologias ativas + histórico de adoção/remoção</dd>
+        <dt>Exemplo</dt><dd><code>GET /v21/api.json?KEY=…&amp;LOOKUP=cielo.com.br</code></dd>
+        <dt>Uso</dt><dd>Detectar troca de stack, novos fornecedores SaaS, integrações</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Wappalyzer</span><span class="tag mixed">API · $</span></div>
+      <p class="card-desc">Alternativa ao BuiltWith, mais barata; ótima para pipelines de bulk lookup.</p>
+      <dl><dt>Puxa</dt><dd>Categorias de tech por domínio, versões quando detectáveis</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">PublicWWW</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Busca reversa de snippets HTML em milhões de sites: pixels, IDs de GA, SDKs, chaves públicas de API.</p>
+      <dl>
+        <dt>Exemplo</dt><dd>Buscar <code>UA-12345678</code> → todos sites que compartilham o mesmo GA = rede de propriedades</dd>
+        <dt>Uso</dt><dd>Descobrir subsidiárias, parceiros e integrações escondidas</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">HTTPArchive</span><span class="tag free">BigQuery · free</span></div>
+      <p class="card-desc">Crawl público mensal do topo da web com payloads, headers e performance completos.</p>
+      <dl>
+        <dt>Puxa</dt><dd>Waterfall, core web vitals, scripts, cookies, tamanho da página</dd>
+        <dt>Uso</dt><dd>Benchmark de performance e comparativo longitudinal</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">GitHub + npm/PyPI</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Repos públicos, SDKs, contribuidores corporativos, velocidade de commits.</p>
+      <dl>
+        <dt>Puxa</dt><dd>Repos, releases, linguagens, dependentes de SDKs públicos</dd>
+        <dt>Exemplo</dt><dd><code>GET /orgs/cielo/repos</code> + cruzamento com emails @dominio</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">StackShare</span><span class="tag mixed">web · $</span></div>
+      <p class="card-desc">Stack <b>declarada</b> pelas empresas (complementa BuiltWith que é observada).</p>
+      <dl><dt>Uso</dt><dd>Confirmar stack + descobrir ferramentas internas não detectáveis no front</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Sitemap + robots.txt</span><span class="tag free">crawl · free</span></div>
+      <p class="card-desc">Mapa da estrutura de produto, rotas privadas, áreas de login, features em beta escondidas.</p>
+      <dl>
+        <dt>Exemplo</dt><dd><code>/sitemap.xml</code> revela <code>/lab/*</code>, <code>/beta/*</code>, <code>/api-docs/v3</code></dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">crt.sh / CT Logs</span><span class="tag free">free</span></div>
+      <p class="card-desc">Certificados SSL emitidos → descobre subdomínios e ambientes de staging expostos.</p>
+      <dl><dt>Uso</dt><dd>Mapear surface real do domínio (complementa SecurityTrails que você já tem)</dd></dl>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p2">
+  <h2 class="section-title">Tráfego &amp; <em>SEO</em></h2>
+  <p class="dek">Volume, origem, keywords, funil. É a camada que transforma um dossiê em briefing de GTM.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">Similarweb</span><span class="tag paid">API · $$$</span></div>
+      <p class="card-desc">Estimativa de tráfego, origem (direto/orgânico/pago/social/referral), páginas top, comportamento, overlap de audiência.</p>
+      <dl>
+        <dt>Puxa</dt><dd>Visits, engagement, top pages, top referrers, country split</dd>
+        <dt>Valor</dt><dd>É a fonte que sozinha já dá funil e posicionamento de mercado</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">SEMrush</span><span class="tag paid">API · $$$</span></div>
+      <p class="card-desc">Keywords orgânicas e pagas por domínio, posições, concorrentes de SEO, histórico de visibilidade.</p>
+      <dl>
+        <dt>Exemplo</dt><dd>Cielo ranqueia para "maquininha sem taxa" na posição 3 há 4 meses</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Ahrefs</span><span class="tag paid">API · $$$</span></div>
+      <p class="card-desc">Backlinks profundos, autoridade, novos domínios referenciando, keywords com tráfego estimado.</p>
+      <dl><dt>Valor</dt><dd>Melhor base de backlinks do mercado; detecta campanhas de PR</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">SerpAPI / DataForSEO</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">SERP real renderizada: anúncios ativos, featured snippets, People-Also-Ask, Maps pack, shopping.</p>
+      <dl>
+        <dt>Puxa</dt><dd>Resultado orgânico, ads pagos no momento, posições por device/região</dd>
+        <dt>Uso</dt><dd>Mapear dúvidas reais do mercado (PAA) e concorrentes em anúncios</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Google Trends</span><span class="tag free">pytrends · free</span></div>
+      <p class="card-desc">Interesse ao longo do tempo por termo, comparação de marcas, sazonalidade, região.</p>
+      <dl><dt>Exemplo</dt><dd>"Stone vs Cielo" last 5y, BR, interest by state</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Reddit API</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Discussões orgânicas, perguntas reais, comparativos espontâneos ("X ou Y?").</p>
+      <dl><dt>Uso</dt><dd>Sinal de sentimento e dores não-filtradas por marketing</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">HN Algolia</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Busca histórica em todos os posts/comentários do Hacker News.</p>
+      <dl><dt>Exemplo</dt><dd><code>GET https://hn.algolia.com/api/v1/search?query=stone+co</code></dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Common Crawl</span><span class="tag free">free</span></div>
+      <p class="card-desc">Snapshots da web pública (petabytes) úteis para pesquisa custom em escala.</p>
+      <dl><dt>Uso</dt><dd>Buscar menções/links a um domínio em escala barata</dd></dl>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p3">
+  <h2 class="section-title">Reviews &amp; <em>voz do cliente</em></h2>
+  <p class="dek">Além de Trustpilot e Reclame Aqui — onde o usuário realmente fala.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">G2</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Reviews B2B SaaS estruturadas, prós/contras por feature, comparativos oficiais da categoria.</p>
+      <dl><dt>Puxa</dt><dd>Nota por dimensão (suporte, setup, ROI), segmento do reviewer, data</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Capterra / GetApp</span><span class="tag mixed">scrape · $</span></div>
+      <p class="card-desc">Reviews B2B com perfil detalhado do avaliador (tamanho da empresa, setor, tempo de uso).</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">ProductHunt</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Lançamentos, upvotes, comentários — ótimo radar de lançamentos concorrentes globais.</p>
+      <dl><dt>Exemplo</dt><dd><code>query { post(slug:"xyz"){ votesCount comments{...} } }</code></dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">YouTube Data</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Vídeos de review, tutorial, unboxing, comparativo. Transcrição via Whisper + clustering de temas.</p>
+      <dl><dt>Uso</dt><dd>Mapear reviews longos e honestos que reviews escritas não capturam</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">App reviews profundo</span><span class="tag free">scrape · free</span></div>
+      <p class="card-desc">Já existem providers de Play/App Store — agrupar por versão + tema com LLM transforma em mapa de força/fraqueza por feature.</p>
+      <dl><dt>Pipeline</dt><dd>Coleta → classificação LLM → agregado por <code>version × feature × sentiment</code></dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Glassdoor</span><span class="tag mixed">scrape · $</span></div>
+      <p class="card-desc">Reviews de funcionários: cultura, salários, diretoria, velocidade. Sinal operacional raro.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Twitter/X API</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Menções em tempo real, suporte público, crises, anúncios de executivos.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Consumidor.gov.br</span><span class="tag free">scrape · free</span></div>
+      <p class="card-desc">Reclamações oficiais mediadas pelo governo — prova de dor regulatória.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p4">
+  <h2 class="section-title">Financeiro &amp; <em>operação</em></h2>
+  <p class="dek">O que geralmente está escondido em empresas privadas — e como extrair mesmo assim.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">Crunchbase</span><span class="tag paid">API · $$$</span></div>
+      <p class="card-desc">Rodadas, investidores, valuation, aquisições, fundadores, board.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">PitchBook / Tracxn</span><span class="tag paid">enterprise · $$$$</span></div>
+      <p class="card-desc">Cobertura mais profunda que Crunchbase, inclui empresas privadas sem PR.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Proxycurl / Coresignal</span><span class="tag paid">API · $$$</span></div>
+      <p class="card-desc"><b>O sinal operacional mais rico para empresas privadas.</b> LinkedIn com histórico de headcount, contratações por área, origem e turnover.</p>
+      <dl>
+        <dt>Exemplo</dt><dd>Área de vendas cresceu +42% em 6 meses, engenharia ficou flat → vetor GTM-first</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Phantombuster</span><span class="tag paid">SaaS · $$</span></div>
+      <p class="card-desc">Automação de scraping de LinkedIn, Twitter, Instagram sem bloqueio.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Receita Federal</span><span class="tag free">free (BR)</span></div>
+      <p class="card-desc">CNPJ, QSA, capital social, filiais, CNAE. Complementa BrasilAPI que você já tem.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Jucesp / Juntas</span><span class="tag free">free (BR)</span></div>
+      <p class="card-desc">Alterações societárias, capital, sócios históricos por estado.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Serasa Experian</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Score e débitos fiscais/negativações públicas da PJ.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">JusBrasil / Escavador</span><span class="tag mixed">API · $</span></div>
+      <p class="card-desc">Processos judiciais — trabalhista, consumidor, regulatório, tributário.</p>
+      <dl><dt>Uso</dt><dd>Mapa de risco operacional e sinal de crise (pico de processos)</dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Brasil.IO</span><span class="tag free">free</span></div>
+      <p class="card-desc">Agregador de bases públicas brasileiras em formato limpo.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Portal da Transparência</span><span class="tag free">API · free</span></div>
+      <p class="card-desc">Contratos com governo federal, sanções CEIS/CNEP.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">CVM / RI</span><span class="tag free">free</span></div>
+      <p class="card-desc">Para listadas: fatos relevantes, 20-F, ITR, release trimestral (sempre lista novos produtos).</p>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p5">
+  <h2 class="section-title">Marketing &amp; <em>go-to-market</em></h2>
+  <p class="dek">O que estão anunciando, para quem, com qual criativo e narrativa.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">Google Ads Transparency</span><span class="tag free">scrape · free</span></div>
+      <p class="card-desc">Todos os anúncios ativos de um advertiser no Google Search, YouTube, Display.</p>
+      <dl><dt>URL</dt><dd><code>adstransparency.google.com/advertiser/{id}</code></dd></dl>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">TikTok Creative Center</span><span class="tag free">scrape · free</span></div>
+      <p class="card-desc">Anúncios em alta, criativos por região, insights de audience.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">LinkedIn Ad Library</span><span class="tag free">free</span></div>
+      <p class="card-desc">Campanhas ativas por empresa na plataforma B2B mais relevante.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">SparkToro</span><span class="tag paid">SaaS · $$</span></div>
+      <p class="card-desc">Audiência: quem sua persona segue, lê, escuta. Mapeia influenciadores reais.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">BuzzSumo</span><span class="tag paid">API · $$</span></div>
+      <p class="card-desc">Conteúdo mais compartilhado por domínio, influenciadores e temas quentes.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Brand24 / Mention</span><span class="tag paid">SaaS · $$</span></div>
+      <p class="card-desc">Monitoramento multi-canal de menções com sentimento.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Mailcharts / Milled</span><span class="tag mixed">SaaS · $</span></div>
+      <p class="card-desc">Biblioteca de e-mail marketing enviados por marcas — cadência, assunto, criativo, segmentação.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p6">
+  <h2 class="section-title">Já <em>integradas</em> no jay-news</h2>
+  <p class="dek">Inventário dos providers presentes em <code>src/lib/markets/research/providers/</code>. Serve como baseline para não duplicar esforço.</p>
+
+  <div class="matrix">
+    <table>
+      <thead><tr><th>Provider</th><th>Camada</th><th>O que puxa</th><th>Custo</th></tr></thead>
+      <tbody>
+        <tr><td>tavily-provider / tavily-targeted</td><td>Search</td><td>Busca web com IA, deep search por domínio</td><td><span class="dot d-mid"></span>pago</td></tr>
+        <tr><td>gdelt</td><td>Notícia</td><td>Cobertura global de notícias em tempo quase-real, com sentiment</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>google-news-rss</td><td>Notícia</td><td>Feeds RSS por query</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>wikipedia-provider</td><td>Contexto</td><td>Overview editorial estruturado</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>website-provider</td><td>Coleta</td><td>Scrape direto do site oficial</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>brapi-provider</td><td>Financeiro</td><td>Cotações, fundamentos de listadas BR</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>bacen-if</td><td>Regulatório</td><td>Instituições financeiras BACEN</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>brasilapi-cnpj</td><td>Cadastral</td><td>QSA, endereço, CNAE via CNPJ</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>cvm-fre</td><td>Regulatório</td><td>Formulário de Referência (listadas)</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>inpi-patents</td><td>IP</td><td>Patentes e marcas BR</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>meta-ad-library</td><td>Marketing</td><td>Anúncios ativos Meta (FB/IG)</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>play-store / app-store</td><td>Produto</td><td>Reviews, ranking, what's new</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>reclame-aqui</td><td>Reviews</td><td>Reclamações BR, score, resolução</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>trustpilot</td><td>Reviews</td><td>Reviews globais</td><td><span class="dot d-hi"></span>grátis</td></tr>
+        <tr><td>google-maps</td><td>Presença</td><td>Locais, reviews, horários</td><td><span class="dot d-mid"></span>pago</td></tr>
+        <tr><td>securitytrails</td><td>Stack</td><td>DNS histórico, subdomínios</td><td><span class="dot d-mid"></span>pago</td></tr>
+        <tr><td>shodan</td><td>Stack</td><td>Fingerprint de serviços expostos</td><td><span class="dot d-mid"></span>pago</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h4>Próximas integrações com maior ROI</h4>
+    <p>① BuiltWith (stack observada) · ② Similarweb (tráfego/funil) · ③ Proxycurl (headcount/contratação) · ④ SerpAPI (demanda real e anúncios) · ⑤ Wayback Machine (backfill histórico, grátis e imediato).</p>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p7">
+  <h2 class="section-title">Catálogo vivo <em>estilo Cielo</em></h2>
+  <p class="dek">Como mapear maquininhas, Pix, parcelamento e features de app — com changelog histórico reconstruído. A combinação de crawl + Wayback + APK teardown + ANATEL dá cobertura quase total.</p>
+
+  <h3 class="group">Fontes por tipo de feature</h3>
+  <div class="split">
+    <div class="cadence">
+      <h5>Páginas oficiais de produto</h5>
+      <ul>
+        <li><b>Crawl recorrente</b> de <code>/produtos</code>, <code>/maquininhas</code>, <code>/pix</code>, <code>/taxas</code> — HTML bruto + render</li>
+        <li><b>Wayback CDX API</b> — histórico completo de cada URL, base para reconstruir changelog retroativo</li>
+        <li><b>Diff de PDFs de taxas/contratos</b> — versioning + diff textual</li>
+      </ul>
+    </div>
+    <div class="cadence">
+      <h5>App (features novas)</h5>
+      <ul>
+        <li><b>AppFollow / Sensor Tower / data.ai</b> — changelog por versão e ASO</li>
+        <li><b>Play/App Store "What's new"</b> — já parcialmente no repo, falta persistir e diffar</li>
+        <li><b>APK teardown</b> (APKMirror + <code>apktool</code>/<code>jadx</code>) — strings e feature flags antes do lançamento público</li>
+        <li><b>Reviews por versão</b> → sinal de "feature X apareceu na v8.2"</li>
+      </ul>
+    </div>
+    <div class="cadence">
+      <h5>Maquininhas (hardware/firmware)</h5>
+      <ul>
+        <li><b>ANATEL — homologação</b> (<code>sch.anatel.gov.br</code>) — catálogo oficial gratuito de todo terminal homologado, com fotos e specs</li>
+        <li><b>INPI</b> — patentes e marcas de novos modelos</li>
+        <li><b>BACEN</b> — arranjos de pagamento e mudanças que forçam features (Pix por aproximação, Automático, Garantido)</li>
+        <li><b>CVM/RI</b> — apresentações trimestrais sempre listam produtos novos</li>
+      </ul>
+    </div>
+    <div class="cadence">
+      <h5>Marketing &amp; lançamento</h5>
+      <ul>
+        <li><b>Meta + Google Ads Transparency</b> — anúncios ativos revelam features em destaque no momento</li>
+        <li><b>YouTube oficial da empresa</b> — vídeos de lançamento, datas exatas</li>
+        <li><b>LinkedIn corporativo e de executivos</b> — posts de product marketing</li>
+      </ul>
+    </div>
+    <div class="cadence">
+      <h5>Docs técnicos &amp; SDKs</h5>
+      <ul>
+        <li><b>developers.cielo.com.br</b> — API reference com changelog versionado; novos endpoints = novas features</li>
+        <li><b>GitHub SDKs oficiais</b> — CHANGELOG.md e releases</li>
+        <li><b>Postman public workspaces</b> — coleções atualizadas</li>
+      </ul>
+    </div>
+    <div class="cadence">
+      <h5>Cobertura editorial</h5>
+      <ul>
+        <li>Reclame Aqui, ProXXima, Mobile Time, Neofeed, Finsiders</li>
+        <li>Associações: ABECS, ABFintechs — calendários setoriais</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="group">Arquitetura do catálogo</h3>
+  <ol class="steps">
+    <li><b>Entidade Product</b><span>Nome, categoria, status, taxas, features[], lançada_em, fonte_primária</span></li>
+    <li><b>Entidade FeatureEvent imutável</b><span>{product_id, type, date, evidence[url, provider, snippet, hash], summary}</span></li>
+    <li><b>Coleta diária</b><span>Páginas oficiais, app store what's-new, ads ativos</span></li>
+    <li><b>Coleta semanal/mensal</b><span>Wayback backfill, ANATEL, CVM/RI, APK teardown</span></li>
+    <li><b>Diff engine</b><span>Hash do conteúdo normalizado por URL; mudança → LLM classifica em FeatureEvent tipado</span></li>
+    <li><b>Timeline por produto</b><span>Render de FeatureEvent[] ordenado; filtros por tipo = "changelog histórico"</span></li>
+    <li><b>Backfill inicial via Wayback</b><span>3–5 anos de snapshots → histórico retroativo imediato</span></li>
+    <li><b>Taxonomia de features</b><span>Normalizer controlado: pagamento / crédito / PIX / gestão / antifraude</span></li>
+    <li><b>Alertas</b><span>Webhook quando surge FeatureEvent novo em produto monitorado</span></li>
+  </ol>
+
+  <h3 class="group">Schema sugerido (Supabase)</h3>
+<div class="schema"><span class="c">-- produtos canônicos por concorrente</span>
+<span class="t">products</span> (
+  id <span class="f">uuid pk</span>,
+  competitor_id <span class="f">uuid fk</span>,
+  slug <span class="f">text</span>,           <span class="c">-- ex: "cielo-lio-v3"</span>
+  name <span class="f">text</span>,
+  category <span class="f">text</span>,       <span class="c">-- maquininha | app | pix | credito | antifraude</span>
+  status <span class="f">text</span>,         <span class="c">-- active | deprecated | beta</span>
+  launched_at <span class="f">date</span>,
+  primary_url <span class="f">text</span>,
+  canonical_taxonomy <span class="f">text[]</span>
+)
+
+<span class="t">feature_events</span> (
+  id <span class="f">uuid pk</span>,
+  product_id <span class="f">uuid fk</span>,
+  type <span class="f">text</span>,           <span class="c">-- launch | update | price_change | deprecation</span>
+  occurred_at <span class="f">timestamptz</span>,
+  summary <span class="f">text</span>,
+  evidence <span class="f">jsonb</span>       <span class="c">-- [{url, provider, snippet, hash, captured_at}]</span>
+)
+
+<span class="t">page_snapshots</span> (  <span class="c">-- input do diff engine</span>
+  id <span class="f">uuid pk</span>,
+  url <span class="f">text</span>,
+  captured_at <span class="f">timestamptz</span>,
+  content_hash <span class="f">text</span>,
+  normalized_text <span class="f">text</span>,
+  raw_html_path <span class="f">text</span>   <span class="c">-- blob storage</span>
+)
+</div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p8">
+  <h2 class="section-title">Taxas &amp; <em>preços</em></h2>
+  <p class="dek">Extrair e comparar planos de concorrentes exige pipeline próprio — preços vivem em PDFs, calculadoras JS e modais dinâmicos.</p>
+
+  <h3 class="group">Onde o preço se esconde</h3>
+  <table class="spec">
+    <thead><tr><th>Local</th><th>Técnica</th><th>Provider / ferramenta</th></tr></thead>
+    <tbody>
+      <tr><td>Página /taxas HTML</td><td>Crawl + seletor CSS estável</td><td>Playwright + cheerio</td></tr>
+      <tr><td>PDF de tarifas oficial</td><td>Download versionado + parse tabelas</td><td><code>pdfplumber</code> / <code>camelot</code> / <code>unstructured.io</code></td></tr>
+      <tr><td>Calculadora JS da home</td><td>Renderizar SPA + interagir com inputs</td><td>Playwright / Puppeteer</td></tr>
+      <tr><td>API pública de simulação</td><td>Request direto ao endpoint interno</td><td>devtools → reverse engineering do XHR</td></tr>
+      <tr><td>Tabela em imagem</td><td>OCR + LLM para reestruturar</td><td>Tesseract / Claude vision</td></tr>
+      <tr><td>Propostas por e-mail</td><td>Captura via conta plant (mystery shopper)</td><td>Mailbox dedicada + parser LLM</td></tr>
+      <tr><td>Apps mobile</td><td>APK teardown + intercept de tráfego</td><td>mitmproxy + jadx</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="group">Schema normalizado de pricing</h3>
+<div class="schema"><span class="t">pricing_plans</span> (
+  id <span class="f">uuid pk</span>,
+  competitor_id <span class="f">uuid</span>,
+  product_id <span class="f">uuid</span>,
+  plan_name <span class="f">text</span>,          <span class="c">-- "Cielo LIO Pro", "Stone Ton T3"</span>
+  segment <span class="f">text</span>,            <span class="c">-- MEI | PME | Corporate</span>
+  captured_at <span class="f">timestamptz</span>,
+  source_type <span class="f">text</span>,        <span class="c">-- pdf | html | calc | email | apk</span>
+  source_url <span class="f">text</span>,
+  raw_snapshot_path <span class="f">text</span>
+)
+
+<span class="t">pricing_rates</span> (
+  id <span class="f">uuid pk</span>,
+  plan_id <span class="f">uuid fk</span>,
+  modality <span class="f">text</span>,           <span class="c">-- debito | credito_avista | credito_2x_6 | credito_7_12 | pix</span>
+  brand <span class="f">text</span>,              <span class="c">-- visa | master | elo | hiper | amex | null</span>
+  mdr_percent <span class="f">numeric</span>,
+  fixed_fee <span class="f">numeric</span>,
+  settlement_days <span class="f">int</span>,      <span class="c">-- D+1, D+30</span>
+  conditions <span class="f">jsonb</span>         <span class="c">-- {min_volume, contract_months, upfront_fee}</span>
+)
+
+<span class="t">pricing_diffs</span> (
+  id <span class="f">uuid pk</span>,
+  plan_id <span class="f">uuid</span>,
+  modality <span class="f">text</span>,
+  previous_mdr <span class="f">numeric</span>,
+  new_mdr <span class="f">numeric</span>,
+  delta_bps <span class="f">numeric</span>,        <span class="c">-- sinal de guerra de preço</span>
+  detected_at <span class="f">timestamptz</span>
+)
+</div>
+
+  <h3 class="group">Matriz comparativa — exemplo</h3>
+  <div class="matrix">
+    <table>
+      <thead><tr>
+        <th>Modalidade</th><th>Cielo Plano A</th><th>Stone T3</th><th>PagBank Premium</th><th>Mercado Pago Point</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Débito</td><td>1,39%</td><td>1,45%</td><td>1,49%</td><td>1,99%</td></tr>
+        <tr><td>Crédito à vista</td><td>2,49%</td><td>2,59%</td><td>2,69%</td><td>3,49%</td></tr>
+        <tr><td>Crédito 2–6x</td><td>3,79%</td><td>3,89%</td><td>3,99%</td><td>4,79%</td></tr>
+        <tr><td>Crédito 7–12x</td><td>4,49%</td><td>4,69%</td><td>4,89%</td><td>5,79%</td></tr>
+        <tr><td>Pix</td><td>0,99%</td><td>0,00%</td><td>0,49%</td><td>0,99%</td></tr>
+        <tr><td>Prazo recebimento</td><td>D+30</td><td>D+1</td><td>D+1</td><td>D+14</td></tr>
+        <tr><td>Aluguel maquininha</td><td>R$ 29,90/mês</td><td>grátis</td><td>R$ 19,90</td><td>grátis</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:11px;font-family:var(--mono);color:var(--paper-dim)">Valores ilustrativos — a pipeline de coleta acima preenche automaticamente e mantém histórico de delta.</p>
+
+  <h3 class="group">Análises derivadas</h3>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">Price Index</span></div>
+      <p class="card-desc">MDR médio ponderado por mix de modalidade típico do segmento → score único para ranquear concorrentes.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Movimento temporal</span></div>
+      <p class="card-desc">Delta em bps semanal/mensal por modalidade. Picos = guerra de preço ou campanha agressiva.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Segmentação oculta</span></div>
+      <p class="card-desc">Comparar preço público (site) × preço de proposta comercial (mystery shopper) revela desconto real por segmento.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Condicionantes</span></div>
+      <p class="card-desc">Taxa baixa só com contrato 12m e volume mínimo — normalizar em <code>conditions</code> para comparar maçã com maçã.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">TCO por perfil</span></div>
+      <p class="card-desc">Simular custo total para personas fixas (MEI com R$5k/mês) em todos planos → comparativo justo para o cliente.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Heatmap por bandeira</span></div>
+      <p class="card-desc">Visa × Master × Elo × Amex — identifica onde cada concorrente perde/ganha margem.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== -->
+<section class="panel" id="p9">
+  <h2 class="section-title">Síntese &amp; <em>pipeline</em></h2>
+  <p class="dek">Volume de fontes só vira insight com schema canônico + reducer LLM + diff temporal. Esse é o coração do sistema.</p>
+
+  <ol class="steps">
+    <li><b>Schema canônico do dossiê</b><span>JSON com campos fixos: product.features[], gtm.channels[], tech.stack[], ops.headcount_trend, financial.funding[], customer.pain_points[], moats[], risks[] — cada um com evidence[] citando provider + URL + trecho.</span></li>
+    <li><b>Extração por provider</b><span>Cada provider devolve fatos atômicos tipados (fact, source, confidence, timestamp), não texto livre. Isso é o ponto de virada.</span></li>
+    <li><b>Reducer com Claude + prompt caching</b><span>Schema e instruções cacheados (TTL 5min ou 1h). Só o payload de fatos muda. Reduz custo em ~90%.</span></li>
+    <li><b>SWOT derivada com citação obrigatória</b><span>Sem URL/snippet → descarta. Elimina alucinação por construção.</span></li>
+    <li><b>Diff temporal</b><span>Roda semanal; snapshots no Supabase. O valor real está no delta.</span></li>
+    <li><b>Scorecards comparativos</b><span>Matriz concorrente × dimensão preenchida a partir do mesmo schema. Vira tabela/heatmap no front.</span></li>
+    <li><b>Agente investigativo</b><span>Loop com AI SDK v6 (stepCountIs) que olha o dossiê, identifica campos fracos/vazios e dispara providers específicos até cobertura mínima. Melhor que rodar tudo sempre.</span></li>
+  </ol>
+
+  <h3 class="group">Fato atômico — exemplo</h3>
+<div class="example"><span class="c">// formato canônico de saída de provider</span>
+{
+  <span class="k">"fact"</span>: <span class="s">"Cielo lançou maquininha LIO V3 com Pix por aproximação"</span>,
+  <span class="k">"dimension"</span>: <span class="s">"product.features"</span>,
+  <span class="k">"entity"</span>: <span class="s">"cielo"</span>,
+  <span class="k">"confidence"</span>: <span class="n">0.92</span>,
+  <span class="k">"occurred_at"</span>: <span class="s">"2026-03-12"</span>,
+  <span class="k">"evidence"</span>: [{
+    <span class="k">"provider"</span>: <span class="s">"website-provider"</span>,
+    <span class="k">"url"</span>: <span class="s">"https://cielo.com.br/maquininhas/lio-v3"</span>,
+    <span class="k">"snippet"</span>: <span class="s">"Agora com Pix por aproximação integrado..."</span>,
+    <span class="k">"captured_at"</span>: <span class="s">"2026-04-15T10:22:01Z"</span>,
+    <span class="k">"hash"</span>: <span class="s">"sha256:ab12..."</span>
+  }]
+}
+</div>
+
+  <h3 class="group">Stack sugerida</h3>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-name">Orquestração</span><span class="tag">vercel</span></div>
+      <p class="card-desc">Vercel Functions (Fluid Compute) + Vercel Queues para jobs duráveis de coleta.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Storage</span><span class="tag">supabase</span></div>
+      <p class="card-desc">Postgres para schema canônico + tabelas de pricing/events, Blob para snapshots HTML/PDF.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">LLM</span><span class="tag">claude</span></div>
+      <p class="card-desc">Claude Sonnet 4.6 para reducer e classificação; Opus 4.6 para síntese SWOT final. Prompt caching obrigatório.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Agente investigativo</span><span class="tag">ai-sdk</span></div>
+      <p class="card-desc">AI SDK v6 com <code>stepCountIs</code> + toolset de providers como tools nativos.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Scraping pesado</span><span class="tag">sandbox</span></div>
+      <p class="card-desc">Vercel Sandbox ou Playwright em container para SPAs e APK teardown.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-name">Observabilidade</span><span class="tag">diff</span></div>
+      <p class="card-desc">Tabela de diffs visível no front — toda mudança detectada vira card com antes/depois.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h4>Princípio de construção</h4>
+    <p>Comece pelo <b>diff de páginas oficiais + Wayback backfill</b>. É grátis, dá histórico instantâneo e prova valor antes de investir em APIs pagas. Depois, adicione Similarweb e Proxycurl para trazer tráfego e headcount. Por último, o agente investigativo.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <span>JAY-NEWS · COMPETITIVE INTELLIGENCE ARSENAL</span>
+  <span>VOL. I · ED. 2026-04</span>
+  <span>© G. JARDIM · INTERNAL USE ONLY</span>
+</footer>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t=>{
+    t.addEventListener('click', ()=>{
+      const id = t.dataset.panel;
+      tabs.forEach(x=>x.setAttribute('aria-selected', x===t ? 'true':'false'));
+      panels.forEach(p=>p.classList.toggle('active', p.id===id));
+      history.replaceState(null,'','#'+id);
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+  });
+  const hash = location.hash.replace('#','');
+  if(hash){ const t=[...tabs].find(x=>x.dataset.panel===hash); if(t) t.click(); }
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight' || e.key==='ArrowLeft'){
+      const i=[...tabs].findIndex(t=>t.getAttribute('aria-selected')==='true');
+      const n=(i + (e.key==='ArrowRight'?1:-1) + tabs.length) % tabs.length;
+      tabs[n].click();
+    }
+  });
+</script>
+</body>
+</html>

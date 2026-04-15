@@ -108,3 +108,88 @@ export const glassdoorProvider = tavilyOnDomain({
   domains: ["glassdoor.com", "glassdoor.com.br"],
   queryFactory: (n) => `${n} reviews empregado`,
 });
+
+/* ────────────────────────────────────────────────────────── */
+/* Novos targeted providers                                    */
+/* ────────────────────────────────────────────────────────── */
+
+export const productHuntProvider = tavilyOnDomain({
+  id: "producthunt",
+  label: "Product Hunt",
+  description: "Lançamentos e upvotes — radar de concorrentes globais.",
+  domains: ["producthunt.com"],
+  queryFactory: (n) => `${n}`,
+});
+
+export const googleAdsTransparencyProvider = tavilyOnDomain({
+  id: "google-ads-transparency",
+  label: "Google Ads Transparency Center",
+  description: "Anúncios ativos do advertiser no Search, YouTube e Display.",
+  domains: ["adstransparency.google.com"],
+  queryFactory: (n) => `${n}`,
+});
+
+export const linkedinAdLibraryProvider = tavilyOnDomain({
+  id: "linkedin-ad-library",
+  label: "LinkedIn Ad Library",
+  description: "Campanhas ativas B2B na plataforma LinkedIn.",
+  domains: ["linkedin.com"],
+  queryFactory: (n) => `${n} ad library anúncios`,
+});
+
+export const anatelHomologacaoProvider = tavilyOnDomain({
+  id: "anatel-homologacao",
+  label: "ANATEL — Homologação",
+  description: "Terminais, maquininhas e hardware homologados (sch.anatel.gov.br).",
+  domains: ["sch.anatel.gov.br", "sistemas.anatel.gov.br", "anatel.gov.br"],
+  queryFactory: (n) => `${n} homologação terminal`,
+});
+
+export const jucespProvider = tavilyOnDomain({
+  id: "jucesp",
+  label: "Juntas Comerciais (Jucesp e outras)",
+  description: "Alterações societárias e capital registradas nas juntas estaduais.",
+  domains: ["jucesp.sp.gov.br", "jucesp.fazenda.sp.gov.br", "jucerja.rj.gov.br", "jucemg.mg.gov.br"],
+  queryFactory: (n) => `${n}`,
+});
+
+export const cvmRiProvider = tavilyOnDomain({
+  id: "cvm-ri",
+  label: "CVM / RI — fatos e apresentações",
+  description: "Fatos relevantes, ITR, apresentações trimestrais (lista novos produtos).",
+  domains: ["rad.cvm.gov.br", "cvm.gov.br", "mzweb.com.br", "riweb.com.br", "mziq.com"],
+  queryFactory: (n) => `${n} fato relevante OR apresentação trimestral`,
+  days: 180,
+});
+
+export const googleTrendsProvider = tavilyOnDomain({
+  id: "google-trends",
+  label: "Google Trends",
+  description: "Termos relacionados e interesse ao longo do tempo para a marca.",
+  domains: ["trends.google.com", "trends.google.com.br"],
+  queryFactory: (n) => `${n}`,
+});
+
+export const appFollowProvider = tavilyOnDomain({
+  id: "appfollow",
+  label: "AppFollow",
+  description: "Changelog por versão, ASO e analytics de apps móveis.",
+  domains: ["appfollow.io"],
+  queryFactory: (n) => `${n} app`,
+});
+
+export const sensorTowerProvider = tavilyOnDomain({
+  id: "sensor-tower",
+  label: "Sensor Tower",
+  description: "Downloads, receita estimada e inteligência de apps móveis.",
+  domains: ["sensortower.com"],
+  queryFactory: (n) => `${n}`,
+});
+
+export const dataAiProvider = tavilyOnDomain({
+  id: "data-ai",
+  label: "data.ai (App Annie)",
+  description: "Ranking histórico, performance e inteligência de apps.",
+  domains: ["data.ai", "appannie.com"],
+  queryFactory: (n) => `${n}`,
+});
