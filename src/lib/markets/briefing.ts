@@ -4,6 +4,7 @@ import { extractJson } from "@/lib/anthropic/json-extract";
 import { searchTavily } from "@/lib/sources/search";
 import { fetchWikipediaSummary, fetchWikipediaExtract } from "./research/wikipedia";
 import { fetchWebsiteMeta } from "./research/website";
+import { lookupPublicCompany, formatBrapiForPrompt, type BrapiQuote } from "./research/brapi";
 
 export type BriefingContent = {
   resumo_executivo: string;
@@ -65,6 +66,7 @@ function buildPrompt(
   research: string,
   wikipedia: string | null,
   website: string | null,
+  brapi: BrapiQuote | null,
   knownColors: string[],
   logoHint: string | null,
 ): string {
@@ -86,6 +88,7 @@ Nome: ${competitor.name}
 ${competitor.website ? `Site: ${competitor.website}` : ""}
 ${competitor.aliases.length ? `Outros nomes: ${competitor.aliases.join(", ")}` : ""}
 
+${brapi ? `== B3 / BRAPI (empresa listada) ==\n${formatBrapiForPrompt(brapi)}\nEstes dados vêm de API pública — use como base de verdade para ticker, setor, valor de mercado e funcionários.\n` : ""}
 ${wikipedia ? `== WIKIPEDIA (PT-BR) ==\n${wikipedia}\n` : ""}
 ${website ? `== DADOS DO SITE OFICIAL ==\n${website}\n` : ""}
 ${knownColors.length ? `== CORES DETECTADAS NO SITE (CSS/meta) ==\n${knownColors.join(", ")}\nUse estas cores como base de verdade para a identidade visual. Não invente cores diferentes das observadas.\n` : ""}
@@ -146,6 +149,7 @@ type DeepResearch = {
   tavily: string;
   wikipedia: string | null;
   website: string | null;
+  brapi: BrapiQuote | null;
   detectedColors: string[];
   logoUrl: string | null;
 };
@@ -170,17 +174,23 @@ async function gatherResearch(competitor: Competitor, market: Market): Promise<D
     }));
 
   queries.push(mk(`${competitor.name} ${market.name} histórico produtos receita`));
-  queries.push(mk(`${competitor.name} CEO diretoria fundadores`));
+  queries.push(mk(`${competitor.name} CEO diretoria executiva presidente`));
   queries.push(mk(`${competitor.name} vs concorrentes diferencial posicionamento`));
   queries.push(mk(`${competitor.name} ações ticker bolsa B3 resultado trimestre`));
+  // Target RI / CVM sources for leadership data on public companies
+  queries.push(mk(
+    `${competitor.name} administração diretoria conselho`,
+    ["cvm.gov.br", "b3.com.br", "br.investing.com", "economatica.com", "valor.globo.com", "infomoney.com.br"],
+  ));
   if (domain) queries.push(mk(`${competitor.name} sobre institucional`, [domain]));
 
-  // ── Wikipedia PT-BR + website scrape in parallel with Tavily
-  const [tavilyBuckets, wikipediaSummary, wikipediaExtract, websiteMeta] = await Promise.all([
+  // ── Wikipedia PT-BR + website scrape + brapi lookup in parallel
+  const [tavilyBuckets, wikipediaSummary, wikipediaExtract, websiteMeta, brapi] = await Promise.all([
     Promise.allSettled(queries),
     fetchWikipediaSummary(competitor.name),
     fetchWikipediaExtract(competitor.name, 3500),
     competitor.website ? fetchWebsiteMeta(competitor.website) : Promise.resolve(null),
+    lookupPublicCompany(competitor.name),
   ]);
 
   const tavilyBlocks: string[] = [];
@@ -218,8 +228,9 @@ async function gatherResearch(competitor: Competitor, market: Market): Promise<D
     tavily: tavilyBlocks.join("\n"),
     wikipedia: wikipediaBlock,
     website: websiteBlock,
+    brapi,
     detectedColors,
-    logoUrl: websiteMeta?.ogImage ?? wikipediaSummary?.originalImage ?? null,
+    logoUrl: websiteMeta?.ogImage ?? brapi?.logoUrl ?? wikipediaSummary?.originalImage ?? null,
   };
 }
 
@@ -258,6 +269,7 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
       research.tavily,
       research.wikipedia,
       research.website,
+      research.brapi,
       research.detectedColors,
       research.logoUrl,
     );
@@ -272,8 +284,7 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const content = extractJson<BriefingContent>(text);
 
-    // Safety net: if we scraped real colors/logo, ensure they're preserved even
-    // if Claude dropped them or replaced them with guesses.
+    // Safety net: preserve scraped/API data even if Claude drops or guesses.
     if (!content.identidade_visual) content.identidade_visual = {};
     if (research.logoUrl && !content.identidade_visual.logo_url) {
       content.identidade_visual.logo_url = research.logoUrl;
@@ -283,6 +294,24 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
       const hasAnyDetected = claudeColors.some((c) => research.detectedColors.includes(c.toLowerCase()));
       if (claudeColors.length === 0 || !hasAnyDetected) {
         content.identidade_visual.cores = research.detectedColors.slice(0, 4);
+      }
+    }
+    if (research.brapi) {
+      if (!content.visao_geral) content.visao_geral = {};
+      if (!content.visao_geral.ticker) content.visao_geral.ticker = `${research.brapi.ticker} - B3`;
+      if (!content.visao_geral.setor && research.brapi.sector) {
+        content.visao_geral.setor = research.brapi.industry
+          ? `${research.brapi.sector} · ${research.brapi.industry}`
+          : research.brapi.sector;
+      }
+      if (!content.visao_geral.funcionarios && research.brapi.employees) {
+        content.visao_geral.funcionarios = `~${research.brapi.employees.toLocaleString("pt-BR")}`;
+      }
+      if (!content.visao_geral.receita && research.brapi.marketCap) {
+        const mc = research.brapi.marketCap;
+        content.visao_geral.receita = mc >= 1e9
+          ? `Market cap: R$ ${(mc / 1e9).toFixed(2)}bi`
+          : `Market cap: R$ ${(mc / 1e6).toFixed(0)}mi`;
       }
     }
 
