@@ -30,6 +30,15 @@ import {
   sitemapRobotsProvider, portalTransparenciaProvider, youtubeDataProvider,
   pageSpeedProvider, productPathsProvider, minhaReceitaProvider,
 } from "./providers/real-extras";
+import { bacenRankingProvider } from "./providers/bacen-ranking";
+import { datajudCnjProvider } from "./providers/datajud-cnj";
+import { builtwithProvider } from "./providers/builtwith";
+import { similarwebProvider } from "./providers/similarweb";
+import { ecommercePlatformsProvider } from "./providers/ecommerce-platforms";
+import { cvmItrProvider } from "./providers/cvm-itr";
+import { pricingPagesProvider } from "./providers/pricing-pages";
+import { comparisonSitesProvider } from "./providers/comparison-sites";
+import { productReviewsProvider } from "./providers/product-reviews";
 
 export const MODULES: ResearchModule[] = [
   {
@@ -54,11 +63,11 @@ export const MODULES: ResearchModule[] = [
   {
     id: "financial-public",
     label: "Financeiro (empresa aberta)",
-    description: "CVM — FRE e Fatos/Apresentações (RI).",
+    description: "CVM — FRE, ITR/DFP, Fatos & Apresentações (RI).",
     icon: "TrendingUp",
     required_fields: ["name"],
     optional_fields: ["ticker", "cnpj"],
-    providers: [cvmFreProvider, cvmRiProvider],
+    providers: [cvmFreProvider, cvmRiProvider, cvmItrProvider],
   },
   {
     id: "gov-contracts",
@@ -169,6 +178,32 @@ export const MODULES: ResearchModule[] = [
     icon: "Server",
     required_fields: ["website"],
     providers: [shodanProvider, securityTrailsProvider, crtShProvider],
+  },
+  {
+    id: "regulatory-br",
+    label: "Regulatório BR (reclamações & processos)",
+    description: "BACEN Ranking de Reclamações e DataJud (CNJ) — processos judiciais.",
+    icon: "Scale",
+    required_fields: ["name"],
+    providers: [bacenRankingProvider, datajudCnjProvider],
+  },
+  {
+    id: "ecommerce-stack",
+    label: "Stack & integrações e-commerce",
+    description: "BuiltWith/tech stack, SimilarWeb e apps em Nuvemshop, VTEX, Tray, Shopify.",
+    icon: "Boxes",
+    required_fields: ["website"],
+    optional_fields: ["name"],
+    providers: [builtwithProvider, similarwebProvider, ecommercePlatformsProvider],
+  },
+  {
+    id: "pricing-features",
+    label: "Comercial: preços & produtos",
+    description: "Crawl de preços/planos/taxas, comparativos e reviews de produto.",
+    icon: "DollarSign",
+    required_fields: ["name"],
+    optional_fields: ["website"],
+    providers: [pricingPagesProvider, comparisonSitesProvider, productReviewsProvider],
   },
 ];
 

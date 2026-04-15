@@ -114,6 +114,19 @@ export const PROVIDER_TTL: Record<string, number> = {
   "tiktok-creative": 86400,
   "linkedin-ad-library": 86400,
 
+  // Regulatório BR
+  "bacen-ranking": 14 * 86400,
+  "datajud-cnj": 7 * 86400,
+
+  // Comercial e stack
+  "builtwith": 14 * 86400,
+  "similarweb": 7 * 86400,
+  "ecommerce-platforms": 14 * 86400,
+  "cvm-itr": 30 * 86400,
+  "pricing-pages": 7 * 86400,
+  "comparison-sites": 3 * 86400,
+  "product-reviews": 3 * 86400,
+
   // Live / não cachear
   "tavily-core": 0,
 };
