@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Rss, Tag, RefreshCw, Loader2, ExternalLink, Settings } from "lucide-react";
+import { ArrowLeft, Building2, Rss, Tag, RefreshCw, Loader2, ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import Image from "next/image";
 
 type Competitor = {
@@ -141,6 +141,13 @@ export default function MarketDetailPage() {
           {market.description && <p className="text-text-muted text-[13px] truncate">{market.description}</p>}
         </div>
         <button
+          onClick={() => router.push(`/markets/${market.id}/settings`)}
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
+          title="Configurações"
+        >
+          <SettingsIcon className="w-[18px] h-[18px]" />
+        </button>
+        <button
           onClick={handleCollect}
           disabled={collecting}
           className={`h-9 px-4 flex items-center gap-2 rounded-full text-[13px] font-medium transition-all active:scale-[0.97] ${
@@ -262,19 +269,6 @@ export default function MarketDetailPage() {
         )}
       </section>
 
-      {/* Sources reference */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted flex items-center gap-1.5">
-            <Settings className="w-3 h-3" /> Configuração
-          </h2>
-        </div>
-        <div className="p-3 rounded-[10px] bg-surface border border-border text-[12px] text-text-muted">
-          {market.market_sources.length > 0
-            ? `${market.market_sources.length} fonte(s) específica(s) configurada(s).`
-            : "Sem fontes específicas — a IA decide durante a coleta."}
-        </div>
-      </section>
     </div>
   );
 }
