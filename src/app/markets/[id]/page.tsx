@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Rss, Tag } from "lucide-react";
+import { ArrowLeft, Building2, Rss, Tag, RefreshCw, Loader2, ExternalLink, Settings } from "lucide-react";
+import Image from "next/image";
+
+type Competitor = {
+  id: string;
+  name: string;
+  website: string | null;
+  enabled: boolean;
+  ai_suggested: boolean;
+};
+
+type Source = { id: string; name: string; url: string; source_type: string; enabled: boolean };
 
 type MarketDetail = {
   id: string;
@@ -11,30 +22,107 @@ type MarketDetail = {
   icon: string;
   color: string;
   market_subtopics: { id: string; label: string }[];
-  market_competitors: { id: string; name: string; website: string | null; enabled: boolean; ai_suggested: boolean }[];
-  market_sources: { id: string; name: string; url: string; source_type: string; enabled: boolean }[];
+  market_competitors: Competitor[];
+  market_sources: Source[];
 };
+
+type MarketArticle = {
+  id: string;
+  title: string;
+  source_name: string;
+  source_url: string;
+  summary: string | null;
+  image_url: string | null;
+  published_at: string | null;
+  relevance_score: number;
+  mentioned_competitor_ids: string[];
+  found_via: "general" | "competitor";
+  detected_at: string;
+};
+
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d`;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
 
 export default function MarketDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const marketId = params?.id;
+
   const [market, setMarket] = useState<MarketDetail | null>(null);
+  const [articles, setArticles] = useState<MarketArticle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [collecting, setCollecting] = useState(false);
+  const [collectError, setCollectError] = useState<string | null>(null);
+
+  const loadMarket = useCallback(async () => {
+    if (!marketId) return;
+    const res = await fetch(`/api/markets/${marketId}`);
+    if (res.ok) setMarket(await res.json());
+  }, [marketId]);
+
+  const loadArticles = useCallback(async () => {
+    if (!marketId) return;
+    const res = await fetch(`/api/markets/${marketId}/articles?limit=60`);
+    if (res.ok) setArticles(await res.json());
+  }, [marketId]);
 
   useEffect(() => {
-    if (!params?.id) return;
+    if (!marketId) return;
     (async () => {
-      const res = await fetch(`/api/markets/${params.id}`);
-      if (res.ok) setMarket(await res.json());
+      setLoading(true);
+      await Promise.all([loadMarket(), loadArticles()]);
       setLoading(false);
     })();
-  }, [params?.id]);
+  }, [marketId, loadMarket, loadArticles]);
+
+  async function handleCollect() {
+    if (!marketId || collecting) return;
+    setCollecting(true);
+    setCollectError(null);
+    try {
+      const res = await fetch(`/api/markets/${marketId}/collect`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro na coleta (${res.status})`);
+      }
+      await loadArticles();
+    } catch (e) {
+      setCollectError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCollecting(false);
+    }
+  }
+
+  const competitorById = useMemo(() => {
+    const map = new Map<string, Competitor>();
+    market?.market_competitors.forEach((c) => map.set(c.id, c));
+    return map;
+  }, [market]);
+
+  const articleCountByCompetitor = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of articles) {
+      for (const id of a.mentioned_competitor_ids) {
+        map.set(id, (map.get(id) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [articles]);
 
   if (loading) return <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 text-text-muted text-[14px]">Carregando...</div>;
   if (!market) return <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 text-text-muted text-[14px]">Market não encontrado.</div>;
 
+  const enabledCompetitors = market.market_competitors.filter((c) => c.enabled);
+
   return (
-    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10">
+    <div className="min-h-screen max-w-3xl mx-auto px-5 py-10 pb-20">
       <header className="flex items-center gap-3 mb-8">
         <button
           onClick={() => router.push("/markets")}
@@ -48,78 +136,144 @@ export default function MarketDetailPage() {
         >
           {market.icon}
         </div>
-        <div>
-          <h1 className="text-[22px] font-bold tracking-tight">{market.name}</h1>
-          {market.description && <p className="text-text-muted text-[13px]">{market.description}</p>}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[22px] font-bold tracking-tight truncate">{market.name}</h1>
+          {market.description && <p className="text-text-muted text-[13px] truncate">{market.description}</p>}
         </div>
+        <button
+          onClick={handleCollect}
+          disabled={collecting}
+          className={`h-9 px-4 flex items-center gap-2 rounded-full text-[13px] font-medium transition-all active:scale-[0.97] ${
+            collecting ? "bg-surface text-text-muted" : "bg-primary text-white hover:bg-primary-hover shadow-sm"
+          }`}
+        >
+          {collecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          {collecting ? "Coletando..." : "Coletar"}
+        </button>
       </header>
 
-      <div className="p-4 rounded-[12px] bg-primary/5 border border-primary/20 mb-8">
-        <p className="text-[13px] text-text-secondary">
-          <span className="font-medium text-text">Coleta automática em breve.</span> Este market está configurado.
-          Na próxima fase, notícias e atualizações dos concorrentes aparecem aqui diariamente.
-        </p>
-      </div>
-
-      {market.market_subtopics.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3 flex items-center gap-1.5">
-            <Tag className="w-3 h-3" /> Sub-tópicos
-          </h2>
-          <div className="flex flex-wrap gap-1.5">
-            {market.market_subtopics.map((s) => (
-              <span key={s.id} className="px-2.5 py-1 rounded-full text-[12px] bg-surface border border-border">
-                {s.label}
-              </span>
-            ))}
-          </div>
-        </section>
+      {collectError && (
+        <div className="mb-6 p-3 rounded-[10px] bg-danger/10 border border-danger/20">
+          <p className="text-[13px] text-danger font-medium">{collectError}</p>
+        </div>
       )}
 
-      <section className="mb-8">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3 flex items-center gap-1.5">
-          <Building2 className="w-3 h-3" /> Concorrentes ({market.market_competitors.length})
-        </h2>
-        {market.market_competitors.length === 0 ? (
+      {market.market_subtopics.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-6">
+          {market.market_subtopics.map((s) => (
+            <span key={s.id} className="px-2.5 py-1 rounded-full text-[12px] bg-surface border border-border text-text-secondary">
+              <Tag className="w-2.5 h-2.5 inline mr-1" />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Competitors */}
+      <section className="mb-10">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted flex items-center gap-1.5">
+            <Building2 className="w-3 h-3" /> Concorrentes ({enabledCompetitors.length})
+          </h2>
+        </div>
+        {enabledCompetitors.length === 0 ? (
           <p className="text-[13px] text-text-muted">Nenhum concorrente cadastrado.</p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {market.market_competitors.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 p-2.5 rounded-[10px] bg-surface border border-border">
-                <Building2 className="w-4 h-4 text-text-muted shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium truncate">{c.name}</p>
-                  {c.website && <p className="text-[11px] text-text-muted truncate">{c.website}</p>}
-                </div>
-                {c.ai_suggested && (
-                  <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">IA</span>
-                )}
-              </div>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {enabledCompetitors.map((c) => {
+              const count = articleCountByCompetitor.get(c.id) ?? 0;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => router.push(`/markets/${market.id}/competitors/${c.id}`)}
+                  className="text-left p-3 rounded-[12px] bg-surface border border-border hover:border-primary/40 hover:bg-surface-light transition-all"
+                >
+                  <div className="flex items-start gap-2">
+                    <Building2 className="w-4 h-4 text-text-muted mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold truncate">{c.name}</p>
+                      {count > 0 && (
+                        <p className="text-[11px] text-primary mt-0.5 font-medium">{count} menções recentes</p>
+                      )}
+                      {count === 0 && (
+                        <p className="text-[11px] text-text-muted mt-0.5">Sem menções ainda</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>
 
-      <section>
+      {/* News feed */}
+      <section className="mb-10">
         <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-3 flex items-center gap-1.5">
-          <Rss className="w-3 h-3" /> Fontes ({market.market_sources.length})
+          <Rss className="w-3 h-3" /> Notícias do mercado ({articles.length})
         </h2>
-        {market.market_sources.length === 0 ? (
-          <p className="text-[13px] text-text-muted">Sem fontes específicas — a IA escolhe durante a coleta.</p>
+        {articles.length === 0 ? (
+          <div className="text-center py-10 rounded-[12px] bg-surface border border-border">
+            <p className="text-[14px] text-text-secondary mb-2">Nenhuma notícia coletada ainda.</p>
+            <p className="text-[12px] text-text-muted">Clique em &quot;Coletar&quot; para rodar a primeira busca.</p>
+          </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {market.market_sources.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 p-2.5 rounded-[10px] bg-surface border border-border">
-                <Rss className="w-4 h-4 text-text-muted shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium truncate">{s.name}</p>
-                  <p className="text-[11px] text-text-muted truncate">{s.url}</p>
-                </div>
-                <span className="text-[10px] text-text-muted uppercase">{s.source_type}</span>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
+            {articles.map((a) => {
+              const mentioned = a.mentioned_competitor_ids
+                .map((id) => competitorById.get(id))
+                .filter((c): c is Competitor => !!c);
+              return (
+                <a
+                  key={a.id}
+                  href={a.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex gap-3 p-3 rounded-[12px] bg-surface border border-border hover:border-primary/40 transition-all"
+                >
+                  {a.image_url && (
+                    <div className="relative w-16 h-16 rounded-[8px] overflow-hidden bg-background shrink-0">
+                      <Image src={a.image_url} alt="" fill sizes="64px" className="object-cover" unoptimized />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold leading-snug line-clamp-2">{a.title}</p>
+                    {a.summary && (
+                      <p className="text-[11px] text-text-secondary mt-1 line-clamp-2">{a.summary}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-text-muted">{a.source_name}</span>
+                      {a.published_at && <span className="text-[10px] text-text-muted">· {timeAgo(a.published_at)}</span>}
+                      <ExternalLink className="w-2.5 h-2.5 text-text-muted" />
+                      {mentioned.map((c) => (
+                        <span
+                          key={c.id}
+                          className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded"
+                        >
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
           </div>
         )}
+      </section>
+
+      {/* Sources reference */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted flex items-center gap-1.5">
+            <Settings className="w-3 h-3" /> Configuração
+          </h2>
+        </div>
+        <div className="p-3 rounded-[10px] bg-surface border border-border text-[12px] text-text-muted">
+          {market.market_sources.length > 0
+            ? `${market.market_sources.length} fonte(s) específica(s) configurada(s).`
+            : "Sem fontes específicas — a IA decide durante a coleta."}
+        </div>
       </section>
     </div>
   );
