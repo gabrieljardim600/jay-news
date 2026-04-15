@@ -38,6 +38,8 @@ export const MODULES: ResearchModule[] = [
     description: "Pesquisa web, Wikipedia, site oficial e brapi. Sempre ativo.",
     icon: "Sparkles",
     always_on: true,
+    required_fields: ["name"],
+    optional_fields: ["website", "ticker"],
     providers: [tavilyCoreProvider, wikipediaProvider, websiteProvider, brapiProvider],
   },
   {
@@ -45,6 +47,8 @@ export const MODULES: ResearchModule[] = [
     label: "Registro corporativo",
     description: "BrasilAPI, Receita Federal (minhareceita), BACEN, Juntas Comerciais.",
     icon: "FileText",
+    required_fields: ["cnpj"],
+    optional_fields: ["name"],
     providers: [brasilApiCnpjProvider, minhaReceitaProvider, bacenIfProvider, jucespProvider],
   },
   {
@@ -52,6 +56,8 @@ export const MODULES: ResearchModule[] = [
     label: "Financeiro (empresa aberta)",
     description: "CVM — FRE e Fatos/Apresentações (RI).",
     icon: "TrendingUp",
+    required_fields: ["name"],
+    optional_fields: ["ticker", "cnpj"],
     providers: [cvmFreProvider, cvmRiProvider],
   },
   {
@@ -59,6 +65,7 @@ export const MODULES: ResearchModule[] = [
     label: "Contratos governo",
     description: "Portal da Transparência — contratos federais por CNPJ.",
     icon: "Landmark",
+    required_fields: ["cnpj"],
     providers: [portalTransparenciaProvider],
   },
   {
@@ -66,6 +73,8 @@ export const MODULES: ResearchModule[] = [
     label: "Liderança & time",
     description: "CVM FRE + LinkedIn (busca pública direcionada).",
     icon: "Users",
+    required_fields: ["name"],
+    optional_fields: ["cnpj"],
     providers: [cvmFreProvider, linkedinPublicProvider],
   },
   {
@@ -73,6 +82,7 @@ export const MODULES: ResearchModule[] = [
     label: "Propriedade intelectual",
     description: "Patentes no INPI (BR), Google Patents e homologação ANATEL.",
     icon: "Lightbulb",
+    required_fields: ["name"],
     providers: [patentsProvider, anatelHomologacaoProvider],
   },
   {
@@ -80,6 +90,8 @@ export const MODULES: ResearchModule[] = [
     label: "Marketing pago",
     description: "Meta, TikTok, Google Ads Transparency e LinkedIn Ad Library.",
     icon: "Megaphone",
+    required_fields: ["name"],
+    optional_fields: ["website"],
     providers: [metaAdLibraryProvider, tiktokCreativeProvider, googleAdsTransparencyProvider, linkedinAdLibraryProvider],
   },
   {
@@ -87,6 +99,7 @@ export const MODULES: ResearchModule[] = [
     label: "Apps mobile",
     description: "Play/App Store + AppFollow, Sensor Tower e data.ai.",
     icon: "Smartphone",
+    required_fields: ["name"],
     providers: [playStoreProvider, appStoreProvider, appFollowProvider, sensorTowerProvider, dataAiProvider],
   },
   {
@@ -94,6 +107,8 @@ export const MODULES: ResearchModule[] = [
     label: "Reputação & satisfação",
     description: "Reclame Aqui, consumidor.gov, Google Maps, Trustpilot, Glassdoor.",
     icon: "Star",
+    required_fields: ["name"],
+    optional_fields: ["website"],
     providers: [reclameAquiProvider, consumidorGovProvider, googleMapsReviewsProvider, trustpilotProvider, glassdoorProvider],
   },
   {
@@ -101,6 +116,8 @@ export const MODULES: ResearchModule[] = [
     label: "Jurídico & regulatório",
     description: "JusBrasil, DOU, Procon-SP, BACEN.",
     icon: "Scale",
+    required_fields: ["name"],
+    optional_fields: ["cnpj"],
     providers: [jusBrasilProvider, douProvider, proconSpProvider, bacenIfProvider],
   },
   {
@@ -108,6 +125,8 @@ export const MODULES: ResearchModule[] = [
     label: "Funding & M&A",
     description: "Crunchbase, Tracxn, StartupBase — startups e funding.",
     icon: "Coins",
+    required_fields: ["name"],
+    optional_fields: ["website"],
     providers: [crunchbaseBasicProvider, tracxnProvider, startupBaseProvider],
   },
   {
@@ -115,6 +134,7 @@ export const MODULES: ResearchModule[] = [
     label: "Notícias (ampliada)",
     description: "Google News RSS e GDELT — além do Tavily.",
     icon: "Newspaper",
+    required_fields: ["name"],
     providers: [googleNewsRssProvider, gdeltProvider],
   },
   {
@@ -122,6 +142,8 @@ export const MODULES: ResearchModule[] = [
     label: "Voz orgânica",
     description: "Reddit, Hacker News, YouTube e Product Hunt — discussões e reviews.",
     icon: "MessageSquare",
+    required_fields: ["name"],
+    optional_fields: ["website"],
     providers: [redditProvider, hnAlgoliaProvider, youtubeDataProvider, productHuntProvider],
   },
   {
@@ -129,6 +151,7 @@ export const MODULES: ResearchModule[] = [
     label: "Demanda & tendências",
     description: "Google Trends — interesse ao longo do tempo e termos correlatos.",
     icon: "TrendingUp",
+    required_fields: ["name"],
     providers: [googleTrendsProvider],
   },
   {
@@ -136,6 +159,7 @@ export const MODULES: ResearchModule[] = [
     label: "Pegada web",
     description: "crt.sh, sitemap/robots, rotas de produto, histórico Wayback e CrUX.",
     icon: "Globe",
+    required_fields: ["website"],
     providers: [crtShProvider, sitemapRobotsProvider, productPathsProvider, waybackCdxProvider, pageSpeedProvider],
   },
   {
@@ -143,6 +167,7 @@ export const MODULES: ResearchModule[] = [
     label: "Infraestrutura & segurança",
     description: "Shodan, SecurityTrails e crt.sh — footprint técnico exposto.",
     icon: "Server",
+    required_fields: ["website"],
     providers: [shodanProvider, securityTrailsProvider, crtShProvider],
   },
 ];

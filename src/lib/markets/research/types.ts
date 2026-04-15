@@ -50,6 +50,8 @@ export type ResearchProvider = {
   fetch: (competitor: ResearchCompetitor, market: ResearchMarket) => Promise<ResearchBlock | null>;
 };
 
+export type EntityField = "name" | "website" | "cnpj" | "ticker" | "aliases";
+
 export type ResearchModule = {
   id: string;
   label: string;
@@ -58,5 +60,9 @@ export type ResearchModule = {
   icon?: string;
   /** When true, this module is always on regardless of user selection. */
   always_on?: boolean;
+  /** Fields needed for the module's providers to run meaningfully. */
+  required_fields?: EntityField[];
+  /** Fields that improve coverage but are not strictly required. */
+  optional_fields?: EntityField[];
   providers: ResearchProvider[];
 };

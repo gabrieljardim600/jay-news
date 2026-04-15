@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Newspaper, TrendingUp, BarChart3 } from "lucide-react";
+import { Newspaper, TrendingUp, BarChart3, Search } from "lucide-react";
 
 type Mode = {
-  key: "news" | "trends" | "markets";
+  key: "news" | "trends" | "markets" | "query";
   label: string;
   href: string;
   icon: typeof Newspaper;
@@ -16,6 +16,7 @@ const MODES: Mode[] = [
   { key: "news", label: "News", href: "/", icon: Newspaper },
   { key: "trends", label: "Trends", href: "/trends", icon: TrendingUp },
   { key: "markets", label: "Markets", href: "/markets", icon: BarChart3 },
+  { key: "query", label: "Consulta", href: "/query", icon: Search },
 ];
 
 function isActive(pathname: string, href: string) {
