@@ -17,11 +17,26 @@ function normalizeHost(raw: string | null | undefined): string | null {
   }
 }
 
+// Short single-word generic company names (e.g., "Stone", "Rede") collide with
+// English/Portuguese common words. Only match via domain in those cases.
+function isAmbiguousSingleWord(token: string): boolean {
+  const trimmed = token.trim();
+  if (trimmed.includes(" ")) return false;
+  if (trimmed.length > 8) return false;
+  // If it contains accent marks / uppercase-only / digits, treat as distinct
+  if (/[\u00C0-\u024F]/.test(trimmed)) return false;
+  return true;
+}
+
 function buildTokens(c: CompetitorRef): { tokens: string[]; host: string | null } {
-  const tokens = [c.name, ...(c.aliases || [])]
+  const host = normalizeHost(c.website);
+  const rawTokens = [c.name, ...(c.aliases || [])]
     .map((s) => (s || "").trim())
     .filter((s) => s.length >= 3);
-  return { tokens, host: normalizeHost(c.website) };
+  // If primary name is ambiguous (single short word) and aliases give no
+  // disambiguation, only keep non-ambiguous tokens (aliases with spaces/accents)
+  const tokens = rawTokens.filter((t) => !isAmbiguousSingleWord(t));
+  return { tokens, host };
 }
 
 function containsWholeWord(haystack: string, token: string): boolean {

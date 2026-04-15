@@ -2,6 +2,7 @@ import type { RawArticle } from "@/types";
 import { searchTavily } from "@/lib/sources/search";
 import { fetchRssFeed } from "@/lib/sources/rss";
 import { filterArticles, looksPortuguese } from "@/lib/digest/filter";
+import { BR_NEWS_DOMAINS } from "@/lib/digest/processor";
 import { findMentions, type CompetitorRef } from "./competitor-matcher";
 
 type MarketRow = {
@@ -64,22 +65,24 @@ function normalizeUrl(raw: string): string {
   }
 }
 
+function cleanTerm(s: string): string {
+  return s.replace(/[&|]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function buildGeneralQueries(market: MarketRow, subtopics: SubtopicRow[]): string[] {
-  const base = market.name.trim();
-  if (subtopics.length === 0) return [base];
-  const labels = subtopics.map((s) => s.label.trim()).filter(Boolean);
-  // One query with all subtopics ORed + one focused per subtopic (cap at 4 subtopics)
-  const queries = [`${base} ${labels.slice(0, 4).join(" OR ")}`];
-  for (const label of labels.slice(0, 4)) {
-    queries.push(`${base} ${label}`);
-  }
-  return queries;
+  const base = cleanTerm(market.name);
+  const region = market.language === "pt-BR" ? " Brasil" : "";
+  const labels = subtopics.map((s) => cleanTerm(s.label)).filter(Boolean);
+  if (labels.length === 0) return [`${base}${region}`];
+  // One focused query per subtopic with market + region context
+  return labels.slice(0, 6).map((label) => `${base} ${label}${region}`);
 }
 
 function competitorQuery(market: MarketRow, c: CompetitorRow, subtopics: SubtopicRow[]): string {
-  const subContext = subtopics.slice(0, 2).map((s) => s.label).join(" ");
-  const q = subContext ? `${c.name} ${subContext}` : `${c.name} ${market.name}`;
-  return q;
+  const region = market.language === "pt-BR" ? " Brasil" : "";
+  const label = subtopics[0]?.label ? ` ${cleanTerm(subtopics[0].label)}` : "";
+  const marketContext = ` ${cleanTerm(market.name)}`;
+  return `${c.name}${marketContext}${label}${region}`;
 }
 
 function domainFromWebsite(website: string | null): string | null {
@@ -108,12 +111,18 @@ export async function collectForMarket({ market, subtopics, competitors, sources
   const generalBuckets: RawArticle[][] = [];
 
   const generalQueries = buildGeneralQueries(market, subtopics);
-  const tavilyDomains = enabledSources
+  const userDomains = enabledSources
     .map((s) => domainFromWebsite(s.url))
     .filter((d): d is string => !!d);
+  // For pt-BR markets, restrict general search to BR news domains unless user
+  // provided their own list. This avoids Tavily surfacing international English
+  // press for Portuguese queries about Brazilian subjects.
+  const generalDomains = userDomains.length > 0
+    ? userDomains
+    : (isPt ? BR_NEWS_DOMAINS : undefined);
 
   for (const q of generalQueries) {
-    const results = await searchTavily(q, 8, tavilyDomains.length ? tavilyDomains : undefined, "basic", 7);
+    const results = await searchTavily(q, 8, generalDomains, "basic", 14);
     generalBuckets.push(results);
   }
 
@@ -130,7 +139,7 @@ export async function collectForMarket({ market, subtopics, competitors, sources
   const competitorBuckets: { competitorId: string; results: RawArticle[] }[] = [];
   for (const c of enabledCompetitors) {
     const q = competitorQuery(market, c, subtopics);
-    const results = await searchTavily(q, 5, undefined, "basic", 14);
+    const results = await searchTavily(q, 5, generalDomains, "basic", 30);
     competitorBuckets.push({ competitorId: c.id, results });
   }
 
@@ -159,7 +168,7 @@ export async function collectForMarket({ market, subtopics, competitors, sources
     byUrl.set(normalized, {
       title: article.title,
       source_name: article.source_name || "Desconhecido",
-      source_url: article.url,
+      source_url: normalized,
       summary: article.content || null,
       image_url: article.image_url || null,
       published_at: article.published_at || null,

@@ -175,7 +175,7 @@ export async function generateCompetitorBriefing(marketId: string, competitorId:
     const client = getAnthropicClient();
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2500,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     });
 
