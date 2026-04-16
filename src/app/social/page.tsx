@@ -1,13 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Settings, Users, Megaphone } from "lucide-react";
+import { RefreshCw, Settings, Users, Megaphone, AlertCircle, CheckCircle, Circle } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { PostCard } from "@/components/social/PostCard";
 import { SourcesManager } from "@/components/social/SourcesManager";
 import type { CrowdSource, SocialPost, SocialVoice } from "@/types";
 
 type Tab = "voices" | "crowd";
+
+interface SourceReport {
+  kind: "voice" | "crowd";
+  label: string;
+  platform: string;
+  fetched: number;
+  upserted: number;
+  status: "ok" | "empty" | "error";
+  error?: string;
+}
 
 export default function SocialPage() {
   const [tab, setTab] = useState<Tab>("voices");
@@ -18,6 +28,7 @@ export default function SocialPage() {
   const [collecting, setCollecting] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [collectMessage, setCollectMessage] = useState<string | null>(null);
+  const [collectReports, setCollectReports] = useState<SourceReport[]>([]);
 
   const loadAll = useCallback(async () => {
     const [voicesRes, crowdRes, feedRes] = await Promise.all([
@@ -45,16 +56,20 @@ export default function SocialPage() {
     if (collecting) return;
     setCollecting(true);
     setCollectMessage(null);
+    setCollectReports([]);
     try {
       const res = await fetch("/api/social/collect", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setCollectMessage(`+${data.postsUpserted} posts (${data.voicesProcessed} vozes, ${data.crowdProcessed} fontes)`);
+        const summary = `+${data.postsUpserted ?? 0} posts coletados`;
+        setCollectMessage(summary);
+        setCollectReports(Array.isArray(data.reports) ? data.reports : []);
         await refreshFeed();
       } else {
-        setCollectMessage(`Erro: ${data.error || "desconhecido"}`);
+        setCollectMessage(`Erro: ${data.error || `HTTP ${res.status}`}`);
       }
-      setTimeout(() => setCollectMessage(null), 6000);
+    } catch (err) {
+      setCollectMessage(`Erro de rede: ${(err as Error).message}`);
     } finally {
       setCollecting(false);
     }
@@ -100,9 +115,37 @@ export default function SocialPage() {
       </div>
 
       {collectMessage && (
-        <div className="mb-4 px-3 py-2 rounded-[10px] bg-surface text-[12px] text-text-secondary">
-          {collectMessage}
+        <div className="mb-3 px-3 py-2 rounded-[10px] bg-surface text-[12px] text-text-secondary flex items-center justify-between gap-2">
+          <span>{collectMessage}</span>
+          <button
+            onClick={() => { setCollectMessage(null); setCollectReports([]); }}
+            className="text-text-muted hover:text-text text-[10px] uppercase tracking-wide"
+          >
+            Fechar
+          </button>
         </div>
+      )}
+
+      {collectReports.length > 0 && (
+        <details className="mb-4 px-3 py-2 rounded-[10px] bg-surface text-[12px]">
+          <summary className="cursor-pointer text-text-muted">Detalhes por fonte ({collectReports.length})</summary>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {collectReports.map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {r.status === "ok" && <CheckCircle className="w-3.5 h-3.5 text-success shrink-0" />}
+                {r.status === "empty" && <Circle className="w-3.5 h-3.5 text-text-muted shrink-0" />}
+                {r.status === "error" && <AlertCircle className="w-3.5 h-3.5 text-danger shrink-0" />}
+                <span className="text-[11px] uppercase tracking-wider text-text-muted shrink-0">{r.platform}</span>
+                <span className="text-[12px] text-text truncate">{r.label}</span>
+                <span className="ml-auto text-[11px] text-text-muted shrink-0">
+                  {r.status === "ok" && `+${r.upserted}`}
+                  {r.status === "empty" && "0 posts"}
+                  {r.status === "error" && (r.error || "erro").slice(0, 80)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {loading ? (

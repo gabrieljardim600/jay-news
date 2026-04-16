@@ -123,26 +123,27 @@ export async function POST(request: Request) {
     },
   });
 
-  // Stream Claude response, accumulating to persist on close
+  // Stream Claude response, accumulating to persist on close.
+  // Use a single TextDecoder with stream:true so multibyte chars (ç, ã, é) that
+  // span chunk boundaries don't get corrupted before we save them to the DB.
   let accumulated = "";
   const sourceStream = streamChat({ history, newUserMessage: message, context, language });
-
   const teedReader = sourceStream.getReader();
-  const encoder = new TextEncoder();
+  const decoder = new TextDecoder("utf-8", { fatal: false });
 
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      // Emit session id as a tiny header line before the body so the client can pick it up
-      controller.enqueue(encoder.encode(`__session__:${sessionId}\n`));
       try {
         while (true) {
           const { done, value } = await teedReader.read();
           if (done) break;
           if (value) {
-            accumulated += new TextDecoder().decode(value);
+            accumulated += decoder.decode(value, { stream: true });
             controller.enqueue(value);
           }
         }
+        // Flush any remaining bytes
+        accumulated += decoder.decode();
       } finally {
         controller.close();
         // Persist assistant turn (best-effort)
@@ -162,11 +163,16 @@ export async function POST(request: Request) {
     },
   });
 
+  // Send sessionId via header only (no inline prefix). Header is exposed to JS
+  // because we set Access-Control-Expose-Headers — same-origin doesn't strictly
+  // need it, but doing it explicitly is robust.
   return new Response(responseStream, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-transform",
       "X-Session-Id": sessionId!,
+      "X-Accel-Buffering": "no",
+      "Access-Control-Expose-Headers": "X-Session-Id",
     },
   });
 }

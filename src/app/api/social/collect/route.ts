@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { collectForUser } from "@/lib/social/collector";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 export async function POST() {
   const supabase = await createClient();

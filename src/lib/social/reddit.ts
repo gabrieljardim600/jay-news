@@ -28,12 +28,21 @@ export async function fetchSubreddit(identifier: string, limit: number = 15): Pr
   const sub = identifier.replace(/^r\//i, "").trim();
   const url = `https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.json?limit=${limit}&raw_json=1`;
   try {
+    // Reddit blocks generic/cloud UAs. Use a browser-ish UA to be safe.
     const res = await fetch(url, {
-      headers: { "User-Agent": "JNews/1.0 (jay-news.vercel.app)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; JNews/1.0; +https://jay-news.vercel.app)",
+        "Accept": "application/json",
+      },
       cache: "no-store",
     });
     if (!res.ok) {
       console.error(`Reddit fetch failed for r/${sub}: ${res.status}`);
+      return [];
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json")) {
+      console.error(`Reddit returned non-JSON for r/${sub}: ${ct}`);
       return [];
     }
     const data = (await res.json()) as RedditListing;
@@ -71,10 +80,15 @@ export async function fetchRedditUser(handle: string, limit: number = 10): Promi
   const url = `https://www.reddit.com/user/${encodeURIComponent(user)}/submitted.json?limit=${limit}&raw_json=1`;
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "JNews/1.0 (jay-news.vercel.app)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; JNews/1.0; +https://jay-news.vercel.app)",
+        "Accept": "application/json",
+      },
       cache: "no-store",
     });
     if (!res.ok) return [];
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json")) return [];
     const data = (await res.json()) as RedditListing;
     return (data.data?.children || [])
       .map((c) => c.data)

@@ -14,7 +14,9 @@ export async function GET(request: Request) {
     .from("social_posts")
     .select("*")
     .eq("user_id", user.id)
+    // Fallback to fetched_at when published_at is null (e.g. some Tavily results)
     .order("published_at", { ascending: false, nullsFirst: false })
+    .order("fetched_at", { ascending: false })
     .limit(limit);
 
   if (type === "voices") query = query.not("voice_id", "is", null);
@@ -22,5 +24,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=300" },
+  });
 }

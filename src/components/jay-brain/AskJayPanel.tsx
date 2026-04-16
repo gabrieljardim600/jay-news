@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Sparkles, X } from "lucide-react";
 import type { AskJayScope } from "@/types";
 
@@ -19,56 +19,27 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
   const [turns, setTurns] = useState<UITurn[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Mutable refs that always reflect the latest values, so async work
+  // (setTimeout, fetch handlers) reads current state instead of stale closures.
+  const sessionIdRef = useRef<string | null>(null);
+  const streamingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastScopeKey = useRef<string>("");
 
-  // Reset conversation when scope changes (different article/digest)
-  useEffect(() => {
-    if (!open) return;
-    const key = `${scope.type}|${scope.id ?? ""}|${scope.article?.id ?? ""}`;
-    if (key !== lastScopeKey.current) {
-      lastScopeKey.current = key;
-      setTurns([]);
-      setSessionId(null);
-      setInput("");
-    }
-    if (scope.preloadedMessage) {
-      // Auto-send the preloaded message once
-      setInput(scope.preloadedMessage);
-      setTimeout(() => sendMessage(scope.preloadedMessage!), 50);
-    } else {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, scope.type, scope.id, scope.article?.id]);
+  // Keep streamingRef in sync
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
 
-  // ESC to close, body scroll lock
-  useEffect(() => {
-    if (!open) return;
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEsc);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handleEsc);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
-
-  // Autoscroll
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns, streaming]);
-
-  async function sendMessage(text: string) {
+  const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || streaming) return;
+    if (!trimmed || streamingRef.current) return;
 
     setTurns((prev) => [...prev, { role: "user", content: trimmed }, { role: "assistant", content: "" }]);
     setInput("");
     setStreaming(true);
+    streamingRef.current = true;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -78,7 +49,7 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId,
+          sessionId: sessionIdRef.current,
           message: trimmed,
           scope: {
             type: scope.type,
@@ -90,42 +61,26 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
       });
 
       if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => "Erro desconhecido");
+        const errText = await res.text().catch(() => `HTTP ${res.status}`);
         setTurns((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: `[Erro] ${errText}` };
+          next[next.length - 1] = { role: "assistant", content: `[Erro ${res.status}] ${errText.slice(0, 300)}` };
           return next;
         });
-        setStreaming(false);
         return;
       }
 
       const sid = res.headers.get("X-Session-Id");
-      if (sid) setSessionId(sid);
+      if (sid) sessionIdRef.current = sid;
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder("utf-8", { fatal: false });
       let acc = "";
-      let sessionLineConsumed = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        let chunk = decoder.decode(value, { stream: true });
-
-        // Strip the leading __session__:<id>\n line if present
-        if (!sessionLineConsumed && chunk.startsWith("__session__:")) {
-          const newlineIdx = chunk.indexOf("\n");
-          if (newlineIdx >= 0) {
-            const sid = chunk.slice("__session__:".length, newlineIdx);
-            setSessionId(sid);
-            chunk = chunk.slice(newlineIdx + 1);
-            sessionLineConsumed = true;
-          }
-        } else {
-          sessionLineConsumed = true;
-        }
-
+        const chunk = decoder.decode(value, { stream: true });
         acc += chunk;
         setTurns((prev) => {
           const next = [...prev];
@@ -133,19 +88,82 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
           return next;
         });
       }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
+      // Flush
+      const tail = decoder.decode();
+      if (tail) {
+        acc += tail;
         setTurns((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: "assistant", content: `[Erro] ${(err as Error).message}` };
+          next[next.length - 1] = { role: "assistant", content: acc };
+          return next;
+        });
+      }
+    } catch (err) {
+      const e = err as Error;
+      if (e.name !== "AbortError") {
+        setTurns((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = { role: "assistant", content: `[Erro de rede] ${e.message}` };
           return next;
         });
       }
     } finally {
+      streamingRef.current = false;
       setStreaming(false);
-      abortRef.current = null;
+      if (abortRef.current === controller) abortRef.current = null;
     }
-  }
+  }, [scope]);
+
+  // Reset + auto-send when the panel opens with a new scope OR a new
+  // preloadedMessage (e.g. clicking a different quick action on the same article).
+  useEffect(() => {
+    if (!open) return;
+
+    // Include preloadedMessage in the key so a different quick action on the
+    // same article still triggers a fresh session and auto-send.
+    const key = `${scope.type}|${scope.id ?? ""}|${scope.article?.id ?? ""}|${scope.preloadedMessage ?? ""}`;
+    const isNewScope = key !== lastScopeKey.current;
+
+    if (isNewScope) {
+      // Abort any in-flight stream from the previous scope.
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+      lastScopeKey.current = key;
+      sessionIdRef.current = null;
+      streamingRef.current = false;
+      setTurns([]);
+      setStreaming(false);
+      setInput("");
+    }
+
+    if (scope.preloadedMessage && isNewScope) {
+      const msg = scope.preloadedMessage;
+      const t = setTimeout(() => sendMessage(msg), 30);
+      return () => clearTimeout(t);
+    } else if (!scope.preloadedMessage) {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [open, scope.type, scope.id, scope.article?.id, scope.preloadedMessage, sendMessage]);
+
+  // ESC + body scroll lock
+  useEffect(() => {
+    if (!open) return;
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  // Autoscroll on new content
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns, streaming]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -166,16 +184,15 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
       ? scope.article.title.slice(0, 60) + (scope.article.title.length > 60 ? "…" : "")
       : scope.type === "digest"
       ? "Sobre o digest atual"
+      : scope.type === "watchlist"
+      ? "Sobre sua watchlist"
       : "Pergunta livre";
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {/* Overlay */}
       <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
       <aside className="w-full max-w-[480px] h-full bg-card-solid border-l border-border flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
-        {/* Header */}
         <header className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 text-primary shrink-0">
@@ -195,7 +212,6 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
           </button>
         </header>
 
-        {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
           {turns.length === 0 && (
             <div className="text-center py-10 text-text-muted text-[13px]">
@@ -204,11 +220,15 @@ export function AskJayPanel({ open, onClose, scope }: AskJayPanelProps) {
             </div>
           )}
           {turns.map((turn, i) => (
-            <ChatTurn key={i} role={turn.role} content={turn.content} pending={streaming && i === turns.length - 1 && turn.role === "assistant" && turn.content.length === 0} />
+            <ChatTurn
+              key={i}
+              role={turn.role}
+              content={turn.content}
+              pending={streaming && i === turns.length - 1 && turn.role === "assistant" && turn.content.length === 0}
+            />
           ))}
         </div>
 
-        {/* Input */}
         <form onSubmit={handleSubmit} className="border-t border-border p-3 shrink-0">
           <div className="flex items-end gap-2">
             <textarea

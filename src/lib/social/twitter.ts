@@ -43,24 +43,25 @@ export async function fetchTwitterHandle(handle: string, limit: number = 10): Pr
       return [];
     }
     const data = (await res.json()) as TavilyResponse;
-    return (data.results || [])
-      .filter((r) => /(twitter|x)\.com\//i.test(r.url))
-      .map<SocialPostInput>((r) => {
-        // Extract tweet id from URL when possible
-        const idMatch = r.url.match(/status\/(\d+)/);
-        const externalId = idMatch ? idMatch[1] : r.url;
-        return {
-          platform: "twitter",
-          external_id: externalId,
-          author: `@${cleanHandle}`,
-          title: null,
-          content: r.content || r.title || "",
-          source_url: r.url,
-          image_url: r.image || null,
-          published_at: r.published_date || null,
-          metadata: { source: "tavily" },
-        };
+    // Only keep URLs that are an actual tweet BY this handle: <site>/<handle>/status/<id>
+    const handleStatusRegex = new RegExp(`^https?://(?:twitter|x)\\.com/${cleanHandle}/status/(\\d+)`, "i");
+    const out: SocialPostInput[] = [];
+    for (const r of data.results || []) {
+      const m = r.url.match(handleStatusRegex);
+      if (!m) continue;
+      out.push({
+        platform: "twitter",
+        external_id: m[1],
+        author: `@${cleanHandle}`,
+        title: null,
+        content: r.content || r.title || "",
+        source_url: r.url,
+        image_url: r.image || null,
+        published_at: r.published_date || null,
+        metadata: { source: "tavily" },
       });
+    }
+    return out;
   } catch (err) {
     console.error(`Twitter fetch error for @${cleanHandle}:`, err);
     return [];
