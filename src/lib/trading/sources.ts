@@ -24,7 +24,7 @@ export const FINANCIAL_RSS = [
   { url: "https://pox.globo.com/rss/valor/", name: "Valor Econômico" },
   { url: "https://br.investing.com/rss/news.rss", name: "Investing.com BR" },
   { url: "https://feeds.folha.uol.com.br/mercado/rss091.xml", name: "Folha Mercado" },
-  { url: "https://rss.cnnbrasil.com.br/economia/", name: "CNN Brasil Economia" },
+  { url: "https://www.cnnbrasil.com.br/economia/feed/", name: "CNN Brasil Economia" },
 ];
 
 export type CalendarEventDef = {
