@@ -166,3 +166,72 @@ export interface DigestWithArticles extends Digest {
   by_topic: Record<string, Article[]>;
   alert_articles: Article[];
 }
+
+// ─── Jay Brain ───────────────────────────────────────────────────────────────
+
+export type WatchlistKind = "asset" | "theme" | "person" | "company";
+
+export interface WatchlistItem {
+  id: string;
+  user_id: string;
+  kind: WatchlistKind;
+  label: string;
+  keywords: string[];
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type InteractionAction =
+  | "read"
+  | "expand"
+  | "quick_action"
+  | "chat_query"
+  | "pulled_more"
+  | "dismissed";
+
+export type InteractionTargetType = "article" | "digest" | "watchlist_item" | "topic";
+
+export interface UserInteraction {
+  id: string;
+  user_id: string;
+  action: InteractionAction;
+  target_type: InteractionTargetType | null;
+  target_id: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export type ChatContextType = "digest" | "article" | "watchlist" | "freeform";
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  title: string;
+  context_type: ChatContextType | null;
+  context_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: ChatRole;
+  content: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export type QuickActionVariant = "deepen" | "impact" | "history";
+
+export interface AskJayScope {
+  type: ChatContextType;
+  id?: string | null;
+  /** Optional inline article payload — used when scope is "article" and we already have it client-side */
+  article?: Pick<Article, "id" | "title" | "summary" | "full_content" | "source_name" | "source_url" | "published_at">;
+  /** Pre-loaded message to send on open (e.g. from a quick action) */
+  preloadedMessage?: string;
+}

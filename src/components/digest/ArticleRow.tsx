@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { relativeDate } from "@/lib/utils/relative-date";
 import { useViewMode } from "@/context/ViewModeContext";
+import { QuickActions } from "@/components/jay-brain/QuickActions";
 import type { Article } from "@/types";
 
 interface ArticleRowProps {
@@ -133,15 +134,18 @@ export function ArticleRow({ article }: ArticleRowProps) {
             </div>
           )}
 
-          <a
-            href={article.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[13px] text-primary font-medium hover:underline"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Abrir na fonte
-          </a>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <a
+              href={article.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[13px] text-primary font-medium hover:underline"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Abrir na fonte
+            </a>
+            <QuickActions article={article} size="sm" />
+          </div>
         </div>
       )}
     </div>

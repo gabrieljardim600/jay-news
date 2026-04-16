@@ -3,6 +3,7 @@
 import { GenerationProvider } from "@/context/GenerationContext";
 import { DataCacheProvider } from "@/context/DataCacheContext";
 import { OnboardingProvider } from "@/context/OnboardingContext";
+import { AskJayProvider } from "@/context/AskJayContext";
 import { GlobalProgressBar } from "@/components/ui/GlobalProgressBar";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -10,8 +11,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <DataCacheProvider>
       <GenerationProvider>
         <OnboardingProvider>
-          <GlobalProgressBar />
-          {children}
+          <AskJayProvider>
+            <GlobalProgressBar />
+            {children}
+          </AskJayProvider>
         </OnboardingProvider>
       </GenerationProvider>
     </DataCacheProvider>
