@@ -54,6 +54,7 @@ export async function generateTradingBrief(
     const update: Record<string, unknown> = {
       status: "completed",
       duration_ms: Date.now() - started,
+      indicators: Array.isArray(parsed.indicators) ? parsed.indicators : [],
       global_bullets: parsed.global_bullets ?? [],
       brasil_bullets: parsed.brasil_bullets ?? [],
       sentiment: {

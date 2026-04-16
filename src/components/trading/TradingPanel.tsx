@@ -2,6 +2,7 @@
 
 import { Globe, MapPin, Lightbulb, Clock, Eye } from "lucide-react";
 import type { TradingBrief } from "@/lib/trading/types";
+import { IndicatorsGrid } from "./IndicatorsGrid";
 import { BulletSection } from "./BulletSection";
 import { AgendaTable } from "./AgendaTable";
 import { SentimentCard } from "./SentimentCard";
@@ -12,6 +13,7 @@ export function TradingPanel({ brief }: { brief: TradingBrief }) {
     <div className="flex flex-col gap-3">
       {isMorning ? (
         <>
+          <IndicatorsGrid indicators={brief.indicators ?? []} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <BulletSection
               title="Cenário global"
@@ -46,6 +48,7 @@ export function TradingPanel({ brief }: { brief: TradingBrief }) {
             accent="text-amber-500 bg-amber-500/10"
             bullets={brief.happened_bullets ?? []}
           />
+          <IndicatorsGrid indicators={brief.indicators ?? []} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <BulletSection
               title="Fechamento global"
