@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import { Sparkles, Newspaper, TrendingUp, BarChart3, Search, FileText, Target, Zap, Layers, Filter } from "lucide-react";
+import { Sparkles, Newspaper, TrendingUp, BarChart3, Search, FileText, Target, Zap, Layers, Filter, CandlestickChart, Sun, Moon } from "lucide-react";
 
-export type OnboardingKey = "intro" | "news" | "trends" | "markets" | "query" | "briefings";
+export type OnboardingKey = "intro" | "news" | "trends" | "markets" | "trading" | "query" | "briefings";
 
 export type OnboardingSection = {
   heading: string;
@@ -72,6 +72,20 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     footerTip: "Dica: se nunca coletou, clique em 'Coletar' no topo do market pra puxar a primeira leva.",
   },
   {
+    key: "trading",
+    title: "Trading — broadcast pré-mercado",
+    subtitle: "Briefing diário para day traders de mini contratos (WINFUT / WDOFUT).",
+    accent: "text-amber-500 bg-amber-500/10",
+    icon: CandlestickChart,
+    sections: [
+      { icon: Sun, heading: "Morning brief", body: "Antes da abertura (06:30 BRT): cenário global (futuros EUA, Ásia, DXY, yield, commodities), cenário Brasil, agenda econômica e sentimento." },
+      { icon: Moon, heading: "Closing brief", body: "Após o pregão (18:00 BRT): o que aconteceu, review da agenda, after-market e o que observar no overnight." },
+      { icon: Target, heading: "Sentimento", body: "Fear & Greed Index, VIX e Put/Call Ratio em indicadores visuais + análise contextual do Claude." },
+      { icon: Zap, heading: "Contexto do dia", body: "Parágrafo interpretativo: o que o cenário sugere pro pregão. Contextual, sem recomendação de compra/venda." },
+    ],
+    footerTip: "Use o seletor de data pra navegar entre dias + toggle Morning/Closing pra alternar edições.",
+  },
+  {
     key: "query",
     title: "Consulta — dossiê sob demanda",
     subtitle: "Pra olhar uma empresa sem precisar criar um market. 3 passos e pronto.",
@@ -107,6 +121,7 @@ export const STEP_BY_KEY: Record<OnboardingKey, OnboardingStep> = Object.fromEnt
 export function keyForPath(pathname: string): OnboardingKey {
   if (pathname === "/" || pathname.startsWith("/manage")) return "news";
   if (pathname.startsWith("/trends")) return "trends";
+  if (pathname.startsWith("/trading")) return "trading";
   if (pathname.startsWith("/markets")) {
     // Briefings aparecem dentro de competitors/[cid]
     if (pathname.match(/\/competitors\/[^/]+/)) return "briefings";

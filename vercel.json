@@ -11,6 +11,14 @@
     {
       "path": "/api/cron/markets-collect",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/trading-broadcast?edition=morning",
+      "schedule": "30 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/trading-broadcast?edition=closing",
+      "schedule": "0 21 * * 1-5"
     }
   ]
 }
