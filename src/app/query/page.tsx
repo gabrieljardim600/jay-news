@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
-import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink, Sparkles, SlidersHorizontal, Settings2, Copy, CheckCheck, FileDown, ListTree } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft, Loader2, Search, AlertCircle, RefreshCw, ExternalLink, Sparkles, SlidersHorizontal, Settings2, Copy, CheckCheck, FileDown, ListTree, History, Trash2 } from "lucide-react";
 
 type EntityField = "name" | "website" | "cnpj" | "ticker" | "aliases";
 
@@ -78,6 +78,18 @@ type BriefingResponse = {
 
 type Mode = "profile" | "custom";
 
+type QueryRunListItem = {
+  id: string;
+  kind: "raw" | "briefing";
+  entity_name: string;
+  entity: { name?: string; website?: string | null; cnpj?: string | null };
+  profile_slug: string | null;
+  profile_label: string | null;
+  module_ids: string[];
+  duration_ms: number | null;
+  created_at: string;
+};
+
 const FIELD_LABEL: Record<EntityField, string> = {
   name: "Nome",
   website: "Site",
@@ -109,13 +121,41 @@ export default function QueryPage() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<QueryRunListItem[]>([]);
+
+  async function reloadHistory() {
+    const r = await fetch("/api/query/runs?limit=30");
+    if (r.ok) setHistory(await r.json());
+  }
+
+  async function openRun(id: string) {
+    setError(null);
+    const r = await fetch(`/api/query/runs/${id}`);
+    if (!r.ok) { setError("Não foi possível carregar o histórico"); return; }
+    const row = await r.json();
+    if (row.kind === "briefing") {
+      setBriefing(row.result);
+      setResult(null);
+    } else {
+      setResult(row.result);
+      setBriefing(null);
+    }
+    setStep(3);
+  }
+
+  async function deleteRun(id: string) {
+    if (!confirm("Remover essa consulta do histórico?")) return;
+    await fetch(`/api/query/runs/${id}`, { method: "DELETE" });
+    void reloadHistory();
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [mRes, pRes] = await Promise.all([
+      const [mRes, pRes, hRes] = await Promise.all([
         fetch("/api/query/modules"),
         fetch("/api/briefing-profiles"),
+        fetch("/api/query/runs?limit=30"),
       ]);
       if (cancelled) return;
       if (mRes.ok) {
@@ -127,10 +167,16 @@ export default function QueryPage() {
         const data: BriefingProfile[] = await pRes.json();
         setProfiles(data);
       }
+      if (hRes.ok) setHistory(await hRes.json());
       setLoadingModules(false);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Refresh history after a successful run.
+  useEffect(() => {
+    if (!running) void reloadHistory();
+  }, [running]);
 
   // When a profile is selected in profile mode, sync its module_ids to `selected`.
   useEffect(() => {
@@ -246,18 +292,23 @@ export default function QueryPage() {
       <Stepper step={step} />
 
       {step === 1 && (
-        <StepOne
-          mode={mode}
-          setMode={setMode}
-          profiles={profiles}
-          profileId={profileId}
-          setProfileId={setProfileId}
-          modules={modules}
-          loading={loadingModules}
-          selected={selected}
-          onToggle={toggleModule}
-          onNext={() => setStep(2)}
-        />
+        <>
+          {history.length > 0 && (
+            <HistoryPanel items={history} onOpen={openRun} onDelete={deleteRun} />
+          )}
+          <StepOne
+            mode={mode}
+            setMode={setMode}
+            profiles={profiles}
+            profileId={profileId}
+            setProfileId={setProfileId}
+            modules={modules}
+            loading={loadingModules}
+            selected={selected}
+            onToggle={toggleModule}
+            onNext={() => setStep(2)}
+          />
+        </>
       )}
 
       {step === 2 && (
@@ -793,6 +844,84 @@ function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center px-2 h-5 rounded-full bg-background text-text-secondary">{children}</span>
   );
+}
+
+function HistoryPanel({
+  items, onOpen, onDelete,
+}: {
+  items: QueryRunListItem[];
+  onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <details className="mb-5 rounded-[14px] border border-border bg-surface overflow-hidden" open>
+      <summary className="px-4 py-3 cursor-pointer flex items-center justify-between list-none hover:bg-surface-light/40 transition-colors">
+        <span className="flex items-center gap-2 text-[13px] font-semibold">
+          <History className="w-3.5 h-3.5 text-text-muted" />
+          Histórico de consultas
+        </span>
+        <span className="text-[11px] text-text-muted">{items.length} {items.length === 1 ? "item" : "itens"}</span>
+      </summary>
+      <ul className="border-t border-border divide-y divide-border max-h-72 overflow-y-auto">
+        {items.map((it) => (
+          <li key={it.id} className="flex items-center gap-2 px-3 py-2 hover:bg-background/40 transition-colors">
+            <button
+              onClick={() => onOpen(it.id)}
+              className="flex-1 min-w-0 text-left"
+            >
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[13px] font-medium truncate">{it.entity_name}</span>
+                {it.profile_label ? (
+                  <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-primary/10 text-primary font-normal">
+                    {it.profile_label}
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 h-4 inline-flex items-center rounded-full bg-background text-text-muted">
+                    {it.module_ids.length} módulos
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-text-muted">
+                <span>{formatRunDate(it.created_at)}</span>
+                {it.duration_ms && <span>· {(it.duration_ms / 1000).toFixed(1)}s</span>}
+                {it.entity?.website && <span>· {hostOnly(it.entity.website)}</span>}
+                {it.entity?.cnpj && <span>· {formatCnpj(it.entity.cnpj)}</span>}
+              </div>
+            </button>
+            <button
+              onClick={() => onDelete(it.id)}
+              className="w-7 h-7 flex items-center justify-center rounded-full text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+              title="Remover do histórico"
+              aria-label="Remover"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function formatRunDate(iso: string): string {
+  const d = new Date(iso);
+  const now = Date.now();
+  const diffS = Math.floor((now - d.getTime()) / 1000);
+  if (diffS < 60) return "agora";
+  if (diffS < 3600) return `${Math.floor(diffS / 60)}min atrás`;
+  if (diffS < 86400) return `${Math.floor(diffS / 3600)}h atrás`;
+  if (diffS < 604800) return `${Math.floor(diffS / 86400)}d atrás`;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
+function hostOnly(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+}
+
+function formatCnpj(v: string): string {
+  const d = v.replace(/\D/g, "");
+  if (d.length !== 14) return v;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
 function BriefingLoading({ profileLabel, moduleCount }: { profileLabel: string; moduleCount: number }) {

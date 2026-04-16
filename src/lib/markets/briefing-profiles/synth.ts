@@ -80,12 +80,20 @@ export async function runProfileBriefing(opts: RunProfileOptions): Promise<Profi
 
   const prompt = buildPrompt(opts.profile, opts.competitor, opts.market, researchText, hints);
   const client = getAnthropicClient();
+  // Token budget escala com o nº de seções: perfis com 15 seções (Subadquirência
+  // BR) não cabem em 6000 e o Claude trunca o JSON. ~1200 tokens por seção
+  // cobre com folga, mínimo 8000, máximo 24000.
+  const maxTokens = Math.max(8000, Math.min(24000, 1200 * (opts.profile.output_sections.length || 6)));
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 6000,
+    max_tokens: maxTokens,
     messages: [{ role: "user", content: prompt }],
   });
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+  const stopReason = (response as unknown as { stop_reason?: string }).stop_reason;
+  if (stopReason === "max_tokens") {
+    console.warn(`[synth] Claude atingiu max_tokens=${maxTokens} no perfil ${opts.profile.slug} — JSON pode estar truncado; parser tolerante vai tentar recuperar.`);
+  }
   const content = extractJson<Record<string, unknown>>(text);
 
   return {

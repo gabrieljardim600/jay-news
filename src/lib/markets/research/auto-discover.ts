@@ -45,17 +45,15 @@ async function extractCnpjFromWebsite(website: string): Promise<string | null> {
   try {
     const base = new URL(website);
     const candidates = [base.toString(), `${base.origin}/sobre`, `${base.origin}/sobre-nos`, `${base.origin}/institucional`, `${base.origin}/contato`, `${base.origin}/quem-somos`];
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(6_000), headers: { "User-Agent": "JNews/1.0" }, redirect: "follow" });
-        if (!res.ok) continue;
-        const html = (await res.text()).slice(0, 300_000);
-        const m = html.match(/\b(\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/\s-]?\d{4}[-\s.]?\d{2})\b/);
-        if (m) {
-          const cnpj = normalizeCnpj(m[1]);
-          if (cnpj) return cnpj;
-        }
-      } catch {}
+    const results = await Promise.allSettled(candidates.map(async (url) => {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5_000), headers: { "User-Agent": "JNews/1.0" }, redirect: "follow" });
+      if (!res.ok) return null;
+      const html = (await res.text()).slice(0, 300_000);
+      const m = html.match(/\b(\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/\s-]?\d{4}[-\s.]?\d{2})\b/);
+      return m ? normalizeCnpj(m[1]) : null;
+    }));
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value) return r.value;
     }
   } catch {}
   return null;

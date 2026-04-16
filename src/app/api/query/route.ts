@@ -99,14 +99,26 @@ export async function POST(request: Request) {
       relevance: { requireTerms, excludeTerms, domainAllow, strict },
     });
     const hints = mergeHints(runs);
-    return NextResponse.json({
+    const duration = Date.now() - startedAt;
+    const payload = {
       entity: { name, website: competitor.website, cnpj: competitor.cnpj, ticker: ticker || null },
       discovery: { discovered: discovery.discovered },
       relevance: { requireTerms, excludeTerms, domainAllow, strict },
       modules: runs,
       hints,
-      durationMs: Date.now() - startedAt,
-    });
+      durationMs: duration,
+    };
+    // Fire-and-forget: grava histórico sem bloquear a resposta
+    supabase.from("query_runs").insert({
+      user_id: user.id,
+      kind: "raw",
+      entity_name: name,
+      entity: payload.entity,
+      module_ids: moduleIds,
+      result: payload,
+      duration_ms: duration,
+    }).then(({ error }) => { if (error) console.error("[query_runs insert]", error); });
+    return NextResponse.json(payload);
   } catch (err) {
     console.error("[api/query] runResearch failed", err);
     return NextResponse.json({ error: "Research run failed" }, { status: 500 });

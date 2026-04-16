@@ -78,7 +78,21 @@ export async function POST(request: Request) {
       forceRefresh: !!body.forceRefresh,
       relevance: { requireTerms, excludeTerms, domainAllow: host ? [host] : [], strict },
     });
-    return NextResponse.json({ ...result, discovery: { discovered: discovery.discovered } });
+    const payload = { ...result, discovery: { discovered: discovery.discovered } };
+    // Fire-and-forget: grava histórico
+    supabase.from("query_runs").insert({
+      user_id: user.id,
+      kind: "briefing",
+      entity_name: name,
+      entity: payload.entity,
+      profile_id: profile.id,
+      profile_slug: profile.slug,
+      profile_label: profile.label,
+      module_ids: profile.module_ids,
+      result: payload,
+      duration_ms: result.durationMs,
+    }).then(({ error }) => { if (error) console.error("[query_runs insert]", error); });
+    return NextResponse.json(payload);
   } catch (e) {
     console.error("[api/query/briefing]", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Falha ao gerar briefing" }, { status: 500 });
