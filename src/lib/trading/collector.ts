@@ -89,20 +89,44 @@ async function fetchSentiment(): Promise<CollectedTradingData["sentiment"]> {
     fear_greed: null, fear_greed_label: null, vix: null, put_call: null,
   };
 
-  // CNN Fear & Greed
+  // CNN Fear & Greed — primary: direct API, fallback: Tavily scrape
   try {
     const r = await fetch(SENTIMENT_CONFIG.fear_greed_url, {
-      signal: AbortSignal.timeout(6_000),
-      headers: { "User-Agent": "JNews/1.0" },
+      signal: AbortSignal.timeout(5_000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; JNews/1.0)" },
     });
     if (r.ok) {
-      const data = (await r.json()) as { fear_and_greed?: { score?: number; rating?: string } };
-      if (data.fear_and_greed) {
-        out.fear_greed = typeof data.fear_and_greed.score === "number" ? Math.round(data.fear_and_greed.score) : null;
-        out.fear_greed_label = data.fear_and_greed.rating ?? null;
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("json")) {
+        const data = (await r.json()) as { fear_and_greed?: { score?: number; rating?: string } };
+        if (data.fear_and_greed) {
+          out.fear_greed = typeof data.fear_and_greed.score === "number" ? Math.round(data.fear_and_greed.score) : null;
+          out.fear_greed_label = data.fear_and_greed.rating ?? null;
+        }
       }
     }
   } catch {}
+  // Fallback: Tavily
+  if (out.fear_greed == null && process.env.TAVILY_API_KEY) {
+    try {
+      const r = await searchTavily("CNN Fear and Greed Index value today", 3, undefined, "basic", 2);
+      for (const item of r) {
+        const m = item.content.match(/(?:fear\s*(?:&|and)\s*greed|index)[^\d]*(\d{1,3})/i);
+        if (m) {
+          const v = parseInt(m[1]);
+          if (v >= 0 && v <= 100) {
+            out.fear_greed = v;
+            if (v <= 25) out.fear_greed_label = "Extreme Fear";
+            else if (v <= 45) out.fear_greed_label = "Fear";
+            else if (v <= 55) out.fear_greed_label = "Neutral";
+            else if (v <= 75) out.fear_greed_label = "Greed";
+            else out.fear_greed_label = "Extreme Greed";
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
 
   // VIX via Tavily
   if (process.env.TAVILY_API_KEY) {

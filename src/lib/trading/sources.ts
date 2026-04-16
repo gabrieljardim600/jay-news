@@ -21,9 +21,10 @@ export const CLOSING_QUERIES = [
 
 export const FINANCIAL_RSS = [
   { url: "https://www.infomoney.com.br/feed/", name: "InfoMoney" },
-  { url: "https://valor.globo.com/financas/rss.xml", name: "Valor Econômico" },
-  { url: "https://www.bloomberglinea.com.br/feed/", name: "Bloomberg Línea" },
+  { url: "https://pox.globo.com/rss/valor/", name: "Valor Econômico" },
   { url: "https://br.investing.com/rss/news.rss", name: "Investing.com BR" },
+  { url: "https://feeds.folha.uol.com.br/mercado/rss091.xml", name: "Folha Mercado" },
+  { url: "https://rss.cnnbrasil.com.br/economia/", name: "CNN Brasil Economia" },
 ];
 
 export type CalendarEventDef = {
