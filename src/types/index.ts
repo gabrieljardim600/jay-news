@@ -227,6 +227,50 @@ export interface ChatMessage {
 
 export type QuickActionVariant = "deepen" | "impact" | "history";
 
+// ─── Social sources (Phase 2) ────────────────────────────────────────────────
+
+export type VoicePlatform = "twitter" | "youtube" | "reddit_user";
+export type CrowdPlatform = "reddit" | "stocktwits";
+export type VoiceCategory = "analyst" | "economist" | "trader" | "institution" | "other";
+
+export interface SocialVoice {
+  id: string;
+  user_id: string;
+  platform: VoicePlatform;
+  handle: string;
+  label: string;
+  category: VoiceCategory;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CrowdSource {
+  id: string;
+  user_id: string;
+  platform: CrowdPlatform;
+  identifier: string;
+  label: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SocialPost {
+  id: string;
+  user_id: string;
+  voice_id: string | null;
+  crowd_source_id: string | null;
+  platform: string;
+  external_id: string;
+  author: string;
+  title: string | null;
+  content: string;
+  source_url: string;
+  image_url: string | null;
+  published_at: string | null;
+  metadata: Record<string, unknown>;
+  fetched_at: string;
+}
+
 export interface AskJayScope {
   type: ChatContextType;
   id?: string | null;
