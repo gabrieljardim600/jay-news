@@ -5,6 +5,7 @@ import { RefreshCw, Settings } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { FeedFilters } from "@/components/gossip/FeedFilters";
 import { FeedList } from "@/components/gossip/FeedList";
+import { DossierGrid } from "@/components/gossip/DossierGrid";
 import { SettingsDrawer } from "@/components/gossip/SettingsDrawer";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
@@ -123,7 +124,7 @@ export default function GossipPage() {
 
           <section>
             <h2 className="text-[15px] font-semibold mb-3">Dossiês de hoje</h2>
-            <p className="text-text-muted text-[13px]">Nenhum dossiê ainda.</p>
+            <DossierGrid refreshKey={feedRefreshKey} />
           </section>
 
           <section>
