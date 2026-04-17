@@ -122,8 +122,14 @@ async function scrapeOnePage(
 
     try {
       await page.goto(pageUrl, { waitUntil: "networkidle2", timeout: PAGE_TIMEOUT });
-    } catch {
-      // continua com o que conseguiu
+    } catch (err) {
+      console.warn(`[worker] goto warn ${pageUrl}:`, err instanceof Error ? err.message : err);
+      // tenta de novo com critério mais leniente — algumas páginas nunca atingem networkidle2
+      try {
+        await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT });
+      } catch (err2) {
+        console.error(`[worker] goto FAIL ${pageUrl}:`, err2 instanceof Error ? err2.message : err2);
+      }
     }
 
     // Metadata
@@ -301,6 +307,9 @@ async function scrapeOnePage(
       merged.push(a);
     }
 
+    console.log(
+      `[worker] scraped ${pageUrl} — title="${meta.title ?? ""}" assets=${merged.length} colors=${colorData.colors.length} fonts=${colorData.fonts.length} screenshot=${screenshot ? screenshot.length : 0}b`
+    );
     return {
       meta: {
         url: pageUrl,
@@ -313,7 +322,8 @@ async function scrapeOnePage(
       fonts: colorData.fonts,
       screenshot,
     };
-  } catch {
+  } catch (err) {
+    console.error(`[worker] scrapeOnePage ERR ${pageUrl}:`, err instanceof Error ? err.message : err);
     return null;
   } finally {
     await page.close();
