@@ -6,7 +6,7 @@
 
 ## Contexto
 
-A plataforma Jay News já tem 6 abas (News, Trends, Markets, Trading, Social, Brands, Consulta). Falta uma aba dedicada a fofoca/entretenimento que combine:
+A plataforma Jay News já tem 7 abas (News, Trends, Markets, Trading, Social, Brands, Consulta). Falta uma aba dedicada a fofoca/entretenimento que combine:
 
 - **Acompanhamento de fontes** (portais, perfis) — como News/Social.
 - **Acompanhamento de pessoas/temas específicos** — como Trends.
@@ -253,7 +253,9 @@ Retorne JSON:
 
 `gossip_dossiers` guarda 1 linha por (user, topic, date). Ao abrir a página de um topic, UI mostra timeline dos últimos 30 dias — cada dia colapsável, mostrando summary. Vira uma mini-biografia editorial acumulada.
 
-Retention: 90 dias. Após isso, cron limpa dossiês antigos (cron semanal separado).
+### Retention
+
+90 dias. Cron semanal `/api/cron/gossip-retention` (schedule `0 5 * * 0`, domingo 05h UTC / 02h BRT) faz `DELETE FROM gossip_dossiers WHERE date < now() - interval '90 days'`. Auth via `CRON_SECRET`. Registrada em `vercel.json` junto com o cron diário.
 
 ## §5 Spike indicator (melhoria #1 aprovada)
 
@@ -280,23 +282,27 @@ Zero custo incremental — é query sobre posts que já foram coletados.
 
 Apresentados no wizard de onboarding (`/gossip/new`). Divididos em 3 grupos geográficos/tier.
 
-### RSS — classe A (portais oficiais)
+Todo template carrega `tier` pré-definido — essencial porque a camada 2 do matcher (§3) só roda em posts cuja fonte tem `tier IN ('proxy','aggregator')`. Tier errado = classifier nunca dispara.
+
+### RSS — tier `primary` (portais oficiais)
 
 **BR:** Quem, Ego/Gshow, F5/UOL Celebridades, Purepeople BR, Contigo
 
 **INT:** TMZ, Page Six (NY Post), Daily Mail Showbiz, E! News, People
 
-### Twitter — classe B (proxies + aggregators, velocidade alta)
+### Twitter — tier `proxy` (repostam IG/TikTok com velocidade)
 
 **BR:** `@hugogloss`, `@choquei`, `@gossipdodia`, `@portalfamosos`
 
 **INT:** `@PopCrave`, `@DeuxMoi`, `@PopBase`, `@PopTingz`
 
-### YouTube / Reddit — comunidade
+### YouTube — tier `primary`
 
-**YouTube:** Matheus Mazzafera, Foquinha, WayneBeck Reacts, PodDelas
+Matheus Mazzafera, Foquinha, WayneBeck Reacts, PodDelas
 
-**Reddit:** `r/Fauxmoi`, `r/popculturechat`, `r/BBB`, `r/brasil`
+### Reddit — tier `aggregator` (comunidade discute e agrega tudo)
+
+`r/Fauxmoi`, `r/popculturechat`, `r/BBB`, `r/brasil`
 
 Claude Haiku sugere subset dessas fontes no onboarding baseado em respostas simples ("acompanha mais BR, internacional ou os dois?", "gosta mais de tabloide, comunidade ou insider?").
 
@@ -335,6 +341,8 @@ DELETE  /api/gossip/topics/:id
 
 GET     /api/gossip/feed?topic_id&source_id&since   feed filtrado (últimos N posts)
 POST    /api/gossip/posts/:id/tag-topic       body: {topic_id, action: 'confirm'|'reject'}
+        # action=confirm  → INSERT/UPDATE (post_id, topic_id) matched_by='manual',           confidence=1.0
+        # action=reject   → INSERT/UPDATE (post_id, topic_id) matched_by='manual_negative', confidence=0.0
 
 POST    /api/gossip/collect                   refresh geral do user (collect + match + dossiês)
 POST    /api/gossip/topics/:id/refresh        refresh manual de um topic específico
@@ -392,15 +400,23 @@ Ao completar, redireciona pra `/gossip` com toast "Coletando suas primeiras fofo
 ## §10 Cron job
 
 ```
-GET /api/cron/gossip-daily   (Vercel cron, header X-Cron-Secret)
+GET /api/cron/gossip-daily       (Vercel cron, header X-Cron-Secret)
+GET /api/cron/gossip-retention   (Vercel cron semanal, purge de dossiers > 90d)
 ```
 
 `vercel.json`:
 ```json
-{ "path": "/api/cron/gossip-daily", "schedule": "0 11 * * *" }
+{
+  "crons": [
+    { "path": "/api/cron/gossip-daily",     "schedule": "0 11 * * *" },
+    { "path": "/api/cron/gossip-retention", "schedule": "0 5  * * 0" }
+  ]
+}
 ```
 
-11h UTC = 08h BRT.
+`0 11 * * *` UTC = 08h BRT diário. `0 5 * * 0` UTC = 02h BRT domingo.
+
+**Runtime:** ambas as routes são Node (Fluid Compute). Timeout `maxDuration: 300` (default do plan atual já permite). Em caso de estouro no futuro, particionar o daily por batches de users e disparar em paralelo ao invés de sequencial.
 
 Execução:
 1. Busca todos os users que têm ≥1 `gossip_source` ativa.
