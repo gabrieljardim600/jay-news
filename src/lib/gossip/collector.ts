@@ -1,9 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GossipSource, GossipPostInput } from "./types";
+import type { GossipSource, GossipPostInput, GossipTopic } from "./types";
 import { fetchGossipRss } from "./fetchers/rss";
 import { fetchGossipTwitter } from "./fetchers/twitter";
 import { fetchGossipYoutube } from "./fetchers/youtube";
 import { fetchGossipReddit } from "./fetchers/reddit";
+import {
+  matchByAliases,
+  persistMatches,
+  type MatchResult,
+} from "./matcher";
 
 export interface SourceReport {
   source_id: string;
@@ -19,6 +24,7 @@ export interface CollectReport {
   errors: string[];
   bySource: SourceReport[];
   insertedPostIds: string[];
+  matchesCreated?: number;
 }
 
 export async function collectGossipForUser(
@@ -39,7 +45,9 @@ export async function collectGossipForUser(
   let fetched = 0;
   let inserted = 0;
 
+  const sourceById = new Map<string, GossipSource>();
   for (const src of (sources ?? []) as GossipSource[]) {
+    sourceById.set(src.id, src);
     try {
       const posts = await fetchForSource(src);
       fetched += posts.length;
@@ -58,7 +66,62 @@ export async function collectGossipForUser(
     }
   }
 
-  return { fetched, inserted, errors, bySource, insertedPostIds };
+  let matchesCreated = 0;
+  if (insertedPostIds.length > 0) {
+    try {
+      matchesCreated = await runMatchingForInsertedPosts(
+        supabase,
+        userId,
+        insertedPostIds,
+        sourceById,
+        errors
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`matching: ${msg}`);
+    }
+  }
+
+  return { fetched, inserted, errors, bySource, insertedPostIds, matchesCreated };
+}
+
+async function runMatchingForInsertedPosts(
+  supabase: SupabaseClient,
+  userId: string,
+  insertedPostIds: string[],
+  _sourceById: Map<string, GossipSource>,
+  _errors: string[]
+): Promise<number> {
+  const { data: topicRows, error: topicErr } = await supabase
+    .from("gossip_topics")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("active", true);
+  if (topicErr) throw topicErr;
+  const topics = (topicRows ?? []) as GossipTopic[];
+  if (topics.length === 0) return 0;
+
+  const { data: postRows, error: postErr } = await supabase
+    .from("gossip_posts")
+    .select("id, title, body, source_id")
+    .in("id", insertedPostIds);
+  if (postErr) throw postErr;
+
+  const posts = (postRows ?? []) as Array<{
+    id: string;
+    title: string | null;
+    body: string | null;
+    source_id: string;
+  }>;
+
+  const allMatches: MatchResult[] = [];
+  for (const p of posts) {
+    const ms = matchByAliases({ id: p.id, title: p.title, body: p.body }, topics);
+    allMatches.push(...ms);
+  }
+
+  await persistMatches(supabase, allMatches);
+  return allMatches.length;
 }
 
 async function fetchForSource(src: GossipSource): Promise<GossipPostInput[]> {
