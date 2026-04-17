@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -30,6 +31,31 @@ export function TopicFormModal({ open, onClose, onSaved, existing }: TopicFormMo
   const [aliases, setAliases] = useState<string[]>([]);
   const [priority, setPriority] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+
+  async function handleSuggestAliases() {
+    if (!name.trim() || !type || suggesting) return;
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/gossip/topics/suggest-aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), type }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`Erro ao sugerir: ${data?.error || `HTTP ${res.status}`}`);
+        return;
+      }
+      const incoming = Array.isArray(data?.aliases) ? (data.aliases as string[]) : [];
+      const merged = Array.from(new Set([...aliases, ...incoming.map((a) => a.toLowerCase())]));
+      setAliases(merged);
+    } catch (err) {
+      alert(`Erro de rede: ${(err as Error).message}`);
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   useEffect(() => {
     if (existing) {
@@ -100,12 +126,36 @@ export function TopicFormModal({ open, onClose, onSaved, existing }: TopicFormMo
           placeholder="Ex: Anitta"
           required
         />
-        <ChipInput
-          label="Aliases (digite e Enter)"
-          values={aliases}
-          onChange={setAliases}
-          placeholder="ex: larissa machado, anittona"
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[13px] text-text-secondary font-medium">
+              Aliases (digite e Enter)
+            </label>
+            <button
+              type="button"
+              onClick={handleSuggestAliases}
+              disabled={!name.trim() || !type || suggesting}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:text-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {suggesting ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Sugerindo...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Sugerir
+                </>
+              )}
+            </button>
+          </div>
+          <ChipInput
+            values={aliases}
+            onChange={setAliases}
+            placeholder="ex: larissa machado, anittona"
+          />
+        </div>
         <Input
           label="Prioridade (1-5)"
           type="number"
