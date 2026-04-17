@@ -94,10 +94,7 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
 
   const text = res.content[0]?.type === "text" ? res.content[0].text : "";
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) {
-    console.warn(`[gossip:dossier] ${topic.name} — no JSON in Claude response. raw=${text.slice(0, 200)}`);
-    return null;
-  }
+  if (!m) return null;
   let parsed: {
     summary?: string;
     key_quotes?: DossierQuote[];
@@ -105,18 +102,22 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
   };
   try {
     parsed = JSON.parse(m[0]);
-  } catch (err) {
-    console.warn(`[gossip:dossier] ${topic.name} — JSON.parse falhou:`, err instanceof Error ? err.message : err);
+  } catch {
     return null;
   }
-  if (!parsed.summary) {
-    console.warn(`[gossip:dossier] ${topic.name} — sem summary no JSON. parsed=${JSON.stringify(parsed).slice(0, 200)}`);
-    return null;
-  }
+  if (!parsed.summary) return null;
 
   const costCents =
     (res.usage.input_tokens / 1_000_000) * 100 +
     (res.usage.output_tokens / 1_000_000) * 500;
+
+  // Claude às vezes responde post_ids_used com o índice do post ("1", "2") em
+  // vez do UUID — o que estoura o cast pra uuid[] no upsert. Filtra só UUIDs
+  // válidos; se não sobrar nada, usa todos os posts do prompt como fallback.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const sanitizedPostIds = (parsed.post_ids_used ?? [])
+    .filter((s): s is string => typeof s === "string" && UUID_RE.test(s));
+  const finalPostIds = sanitizedPostIds.length > 0 ? sanitizedPostIds : posts.map((p) => p.id);
 
   const row = {
     user_id: userId,
@@ -126,7 +127,7 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
     key_quotes: parsed.key_quotes ?? [],
     spike_score: spike.score,
     spike_level: spike.level,
-    post_ids: parsed.post_ids_used ?? posts.map((p) => p.id),
+    post_ids: finalPostIds,
     model: MODEL,
     input_tokens: res.usage.input_tokens,
     output_tokens: res.usage.output_tokens,
