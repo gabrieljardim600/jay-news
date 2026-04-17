@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Newspaper, TrendingUp, BarChart3, Search, CandlestickChart, Users, Palette } from "lucide-react";
+import { Newspaper, TrendingUp, BarChart3, Search, CandlestickChart, Users, Palette, Sparkles } from "lucide-react";
 
 type Mode = {
-  key: "news" | "trends" | "markets" | "trading" | "social" | "brands" | "query";
+  key: "news" | "trends" | "markets" | "trading" | "social" | "brands" | "gossip" | "query";
   label: string;
   href: string;
   icon: typeof Newspaper;
@@ -19,6 +19,7 @@ const MODES: Mode[] = [
   { key: "trading", label: "Trading", href: "/trading", icon: CandlestickChart },
   { key: "social", label: "Social", href: "/social", icon: Users },
   { key: "brands", label: "Brands", href: "/brands", icon: Palette },
+  { key: "gossip", label: "Gossip", href: "/gossip", icon: Sparkles },
   { key: "query", label: "Consulta", href: "/query", icon: Search },
 ];
 
