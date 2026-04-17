@@ -91,6 +91,22 @@ export async function createAndRunLightScrape(
     // 2. Light scrape
     const result = await runLightScrape(urls);
 
+    // Se nenhuma página rendeu HTML útil (todas 403/timeout/SPA-vazia), aborta
+    // com erro claro em vez de marcar como completed com "insufficient data".
+    const fetchedPages = result.pages.filter((p) => p.title || p.description).length;
+    if (
+      fetchedPages === 0 &&
+      result.colors.length === 0 &&
+      result.fontFamilies.length === 0 &&
+      result.assets.length === 0
+    ) {
+      throw new Error(
+        "Não consegui extrair dados visuais do site. Provavelmente é uma SPA " +
+          "renderizada no cliente ou tem proteção anti-bot (Cloudflare/Akamai). " +
+          "Use o Deep scrape (Puppeteer) para esse domínio."
+      );
+    }
+
     // 3. Download assets → Storage
     const downloaded = await downloadAssets(supabase, result.assets, scrapeId);
     if (downloaded.length > 0) {

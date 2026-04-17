@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { GossipTopicType } from "@/lib/gossip/types";
+import type { GossipTopic, GossipTopicType } from "@/lib/gossip/types";
+import { matchByAliases, persistMatches } from "@/lib/gossip/matcher";
 
 const VALID_TYPES: GossipTopicType[] = ["person", "couple", "event", "show", "brand"];
 
@@ -78,5 +79,28 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data, { status: 201 });
+
+  // Backfill: roda matching camada 1 (alias) contra posts já coletados
+  // dos últimos 14 dias. Sem isso, um topic novo só pegaria posts futuros.
+  let backfilled = 0;
+  try {
+    const since = new Date(Date.now() - 14 * 24 * 3600_000).toISOString();
+    const { data: postRows } = await supabase
+      .from("gossip_posts")
+      .select("id, title, body")
+      .eq("user_id", user.id)
+      .gte("published_at", since)
+      .limit(2000);
+
+    const posts = (postRows ?? []) as Array<{ id: string; title: string | null; body: string | null }>;
+    const matches = posts.flatMap((p) => matchByAliases(p, [data as GossipTopic]));
+    if (matches.length > 0) {
+      await persistMatches(supabase, matches);
+      backfilled = matches.length;
+    }
+  } catch (err) {
+    console.warn("[gossip:topics] backfill falhou", err);
+  }
+
+  return NextResponse.json({ ...data, _backfilled: backfilled }, { status: 201 });
 }

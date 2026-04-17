@@ -64,9 +64,10 @@ export function matchByAliases(
   const matches: MatchResult[] = [];
   for (const t of topics) {
     if (!t.active) continue;
-    for (const alias of t.aliases) {
+    const needles = collectNeedles(t);
+    for (const alias of needles) {
       if (alias.length < 3) continue;
-      const re = new RegExp(`\\b${escapeRegex(alias.toLowerCase())}\\b`, "i");
+      const re = new RegExp(`\\b${escapeRegex(alias)}\\b`, "i");
       if (re.test(haystack)) {
         matches.push({ post_id: post.id, topic_id: t.id, confidence: 1.0, matched_by: "alias" });
         break;
@@ -74,6 +75,26 @@ export function matchByAliases(
     }
   }
   return matches;
+}
+
+// Sempre inclui o próprio nome do topic + aliases. Para "person" também
+// aceita o último token (sobrenome) como alias implícito — é o que aparece
+// na maioria das menções coloquiais ("Vorcaro fez X" em vez do nome completo).
+function collectNeedles(t: GossipTopic): string[] {
+  const out = new Set<string>();
+  if (t.name) out.add(t.name.toLowerCase().trim());
+  for (const a of t.aliases) {
+    const v = a.toLowerCase().trim();
+    if (v) out.add(v);
+  }
+  if (t.type === "person" && t.name) {
+    const tokens = t.name.trim().split(/\s+/);
+    if (tokens.length > 1) {
+      const last = tokens[tokens.length - 1].toLowerCase();
+      if (last.length >= 4) out.add(last);
+    }
+  }
+  return [...out];
 }
 
 function escapeRegex(s: string): string {
