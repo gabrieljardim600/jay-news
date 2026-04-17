@@ -41,12 +41,32 @@ export default function GossipPage() {
     })();
   }, [loadSources, loadTopics]);
 
+  async function collect() {
+    if (loadingCollect) return;
+    setLoadingCollect(true);
+    try {
+      const res = await fetch("/api/gossip/collect", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`Erro ao coletar: ${data?.error || `HTTP ${res.status}`}`);
+        return;
+      }
+      const inserted = Number(data?.inserted ?? 0);
+      const errors = Array.isArray(data?.errors) ? data.errors.length : 0;
+      alert(`${inserted} post(s) novo(s) / ${errors} erro(s)`);
+      setFeedRefreshKey((k) => k + 1);
+      await loadSources();
+    } catch (err) {
+      alert(`Erro de rede: ${(err as Error).message}`);
+    } finally {
+      setLoadingCollect(false);
+    }
+  }
+
   const refreshBtn = (
     <button
       disabled={loadingCollect}
-      onClick={() => {
-        // Will be wired in Task 12
-      }}
+      onClick={collect}
       className={`ml-1 h-9 px-4 flex items-center gap-2 rounded-full text-[13px] font-medium transition-all duration-200 active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed ${
         loadingCollect ? "bg-surface text-text-muted" : "bg-primary text-white hover:bg-primary-hover shadow-sm"
       }`}
@@ -73,10 +93,6 @@ export default function GossipPage() {
       {refreshBtn}
     </>
   );
-
-  // Silence unused warnings until wired in later tasks
-  void setLoadingCollect;
-  void setFeedRefreshKey;
 
   return (
     <div className="min-h-screen max-w-3xl mx-auto px-5 py-8 pb-20">
