@@ -131,9 +131,16 @@ Your task: produce a single JSON object with this shape:
   "notes": "<1-2 sentences on visual identity, tone, or distinctive treatment>"
 }
 
-Rules:
-- Prefer hex values that appear frequently AND from multiple sources.
-- Reject noisy colors like tracking pixel colors, ad-network palettes, or Google/Facebook defaults.
+Rules for color classification:
+- Primary = the dominant brand chrome color. Must be in the top of the list by occurrence.
+- Secondary & accent are OPTIONAL. Only pick them if they clearly repeat across multiple sources AND have at least ~30% of the primary's occurrence count. If unsure, return null — returning null is strongly preferred over guessing.
+- Reject "UI state indicator" colors unless they clearly dominate the chrome:
+    * green (#0a9e5a, #16a34a, #22c55e, etc.) = up/positive/success indicator — common in fintech tickers
+    * red (#dc2626, #ef4444, #cc3333, etc.) = down/negative/error indicator
+    * orange/amber in isolation = warning indicator
+  These look saturated and catch the eye, but they are almost never the brand accent. Put them in "noise" instead.
+- Reject 3rd-party widget colors: Google blue (#4285f4), Facebook blue (#1877f2), Instagram gradient pinks, YouTube red (#ff0000), WhatsApp green (#25d366), Twitter/X blue, tracking pixel colors.
+- Prefer hex values that appear frequently AND from multiple sources (stylesheet + css_var > inline alone).
 - Do NOT hallucinate colors that aren't in the list.
 - Pick fonts that look like BRAND fonts, not generic system stacks.
 - Return ONLY the JSON object, no markdown fences, no prose.`;
@@ -165,6 +172,30 @@ function composeSystem(input: BuilderInput, ai: Partial<AIDesignSystem>): Design
     logosInInput.find((l) => l.originalUrl === ai.primary_logo_url)?.publicUrl ??
     logosInInput[0]?.publicUrl;
 
+  const primaryRole = toRole(ai.colors?.primary, "primary", 0.9);
+  const primaryOcc = primaryRole
+    ? input.colors.find((c) => c.hex === primaryRole.hex)?.occurrences ?? 0
+    : 0;
+
+  // Filtro de dominância — secondary/accent só passam se aparecerem com
+  // frequência relevante vs o primary. Evita que cores de estado (verde up,
+  // vermelho down, amarelo warning) sejam rotuladas como brand.
+  const DOMINANCE_RATIO = 0.2;
+  const MIN_OCCURRENCES = 3;
+  const dominant = (hex: string | undefined): string | undefined => {
+    if (!hex || primaryOcc === 0) return hex;
+    const occ = input.colors.find((c) => c.hex === hex.toLowerCase())?.occurrences ?? 0;
+    if (occ < MIN_OCCURRENCES) return undefined;
+    if (occ / primaryOcc < DOMINANCE_RATIO) return undefined;
+    return hex;
+  };
+
+  const secondaryHex = dominant(ai.colors?.secondary);
+  const accentHex = dominant(ai.colors?.accent);
+  const droppedIntoNoise: string[] = [];
+  if (ai.colors?.secondary && !secondaryHex) droppedIntoNoise.push(ai.colors.secondary.toLowerCase());
+  if (ai.colors?.accent && !accentHex) droppedIntoNoise.push(ai.colors.accent.toLowerCase());
+
   return {
     brand: {
       name: ai.brand_name ?? input.domain,
@@ -172,13 +203,13 @@ function composeSystem(input: BuilderInput, ai: Partial<AIDesignSystem>): Design
       tagline: ai.tagline,
     },
     colors: {
-      primary: toRole(ai.colors?.primary, "primary", 0.9),
-      secondary: toRole(ai.colors?.secondary, "secondary", 0.8),
-      accent: toRole(ai.colors?.accent, "accent", 0.8),
+      primary: primaryRole,
+      secondary: toRole(secondaryHex, "secondary", 0.8),
+      accent: toRole(accentHex, "accent", 0.8),
       neutral: neutralRoles,
       background: toRole(ai.colors?.background, "background", 0.85),
       text: toRole(ai.colors?.text, "text", 0.85),
-      noise: ai.colors?.noise ?? [],
+      noise: [...(ai.colors?.noise ?? []), ...droppedIntoNoise],
     },
     typography: {
       primary_font: ai.typography?.primary_font ?? undefined,
