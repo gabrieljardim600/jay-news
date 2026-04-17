@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Settings } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
+import { FeedFilters } from "@/components/gossip/FeedFilters";
+import { FeedList } from "@/components/gossip/FeedList";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
 export default function GossipPage() {
@@ -12,6 +14,8 @@ export default function GossipPage() {
   const [loadingCollect, setLoadingCollect] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>();
+  const [selectedSourceId, setSelectedSourceId] = useState<string | undefined>();
 
   const loadSources = useCallback(async () => {
     const res = await fetch("/api/gossip/sources");
@@ -70,10 +74,9 @@ export default function GossipPage() {
   );
 
   // Silence unused warnings until wired in later tasks
-  void feedRefreshKey;
-  void setFeedRefreshKey;
   void setLoadingCollect;
   void settingsOpen;
+  void setFeedRefreshKey;
 
   return (
     <div className="min-h-screen max-w-3xl mx-auto px-5 py-8 pb-20">
@@ -93,6 +96,15 @@ export default function GossipPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-8">
+          <FeedFilters
+            topics={topics}
+            sources={sources}
+            selectedTopicId={selectedTopicId}
+            selectedSourceId={selectedSourceId}
+            onTopicChange={setSelectedTopicId}
+            onSourceChange={setSelectedSourceId}
+          />
+
           <section>
             <h2 className="text-[15px] font-semibold mb-3">Dossiês de hoje</h2>
             <p className="text-text-muted text-[13px]">Nenhum dossiê ainda.</p>
@@ -100,10 +112,12 @@ export default function GossipPage() {
 
           <section>
             <h2 className="text-[15px] font-semibold mb-3">Feed</h2>
-            <p className="text-text-muted text-[13px]">Feed será carregado aqui.</p>
-            <p className="text-text-muted text-[11px] mt-2">
-              {topics.length} topic(s) · {sources.length} fonte(s)
-            </p>
+            <FeedList
+              topicId={selectedTopicId}
+              sourceId={selectedSourceId}
+              refreshKey={feedRefreshKey}
+              topics={topics}
+            />
           </section>
         </div>
       )}
