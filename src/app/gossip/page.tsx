@@ -42,6 +42,28 @@ export default function GossipPage() {
     })();
   }, [loadSources, loadTopics]);
 
+  async function handleTagTopic(
+    action: "confirm" | "reject",
+    topicId: string,
+    postId: string
+  ) {
+    try {
+      const res = await fetch(`/api/gossip/posts/${postId}/tag-topic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic_id: topicId, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`Erro: ${data?.error || `HTTP ${res.status}`}`);
+        return;
+      }
+      setFeedRefreshKey((k) => k + 1);
+    } catch (err) {
+      alert(`Erro de rede: ${(err as Error).message}`);
+    }
+  }
+
   async function collect() {
     if (loadingCollect) return;
     setLoadingCollect(true);
@@ -134,6 +156,7 @@ export default function GossipPage() {
               sourceId={selectedSourceId}
               refreshKey={feedRefreshKey}
               topics={topics}
+              onTag={handleTagTopic}
             />
           </section>
         </div>
