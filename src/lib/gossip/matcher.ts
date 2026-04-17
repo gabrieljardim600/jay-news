@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import Anthropic from "@anthropic-ai/sdk";
 import type { GossipPost, GossipTopic } from "./types";
 
 export interface MatchResult {
@@ -6,6 +7,53 @@ export interface MatchResult {
   topic_id: string;
   confidence: number;
   matched_by: "alias" | "claude";
+}
+
+const PROPER_NOUN_RE = /([A-ZÀ-ÝZ][A-ZÀ-ÝZa-zà-ý]+(?:\s+[A-ZÀ-ÝZ][A-ZÀ-ÝZa-zà-ý]+){1,3})/;
+
+export function hasProperNouns(text: string): boolean {
+  return PROPER_NOUN_RE.test(text);
+}
+
+export async function matchByClaude(
+  post: Pick<GossipPost, "id" | "title" | "body">,
+  topics: GossipTopic[]
+): Promise<MatchResult[]> {
+  if (topics.length === 0) return [];
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  const prompt = `Dado o post, quais desses topics são mencionados?
+
+POST:
+Título: ${post.title ?? ""}
+Corpo: ${(post.body ?? "").slice(0, 800)}
+
+TOPICS:
+${topics.map((t, i) => `${i + 1}. ${t.name} (${t.type}) — aliases: ${t.aliases.join(", ")}`).join("\n")}
+
+Responda JSON: {"matches":[{"topic_index":1,"confidence":0.8}]}. Só inclua confidence >= 0.6. Array vazio se nada bater.`;
+
+  const res = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 300,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = res.content[0]?.type === "text" ? res.content[0].text : "";
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return [];
+  try {
+    const parsed = JSON.parse(m[0]) as { matches?: Array<{ topic_index: number; confidence: number }> };
+    return (parsed.matches ?? [])
+      .filter((mItem) => mItem.confidence >= 0.6 && topics[mItem.topic_index - 1])
+      .map((mItem) => ({
+        post_id: post.id,
+        topic_id: topics[mItem.topic_index - 1].id,
+        confidence: mItem.confidence,
+        matched_by: "claude" as const,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 export function matchByAliases(

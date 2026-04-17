@@ -6,9 +6,13 @@ import { fetchGossipYoutube } from "./fetchers/youtube";
 import { fetchGossipReddit } from "./fetchers/reddit";
 import {
   matchByAliases,
+  matchByClaude,
+  hasProperNouns,
   persistMatches,
   type MatchResult,
 } from "./matcher";
+
+const CLAUDE_CALL_CAP_PER_COLLECT = 20;
 
 export interface SourceReport {
   source_id: string;
@@ -89,8 +93,8 @@ async function runMatchingForInsertedPosts(
   supabase: SupabaseClient,
   userId: string,
   insertedPostIds: string[],
-  _sourceById: Map<string, GossipSource>,
-  _errors: string[]
+  sourceById: Map<string, GossipSource>,
+  errors: string[]
 ): Promise<number> {
   const { data: topicRows, error: topicErr } = await supabase
     .from("gossip_topics")
@@ -115,9 +119,47 @@ async function runMatchingForInsertedPosts(
   }>;
 
   const allMatches: MatchResult[] = [];
+  const aliasMatchedPostIds = new Set<string>();
   for (const p of posts) {
     const ms = matchByAliases({ id: p.id, title: p.title, body: p.body }, topics);
+    if (ms.length > 0) aliasMatchedPostIds.add(p.id);
     allMatches.push(...ms);
+  }
+
+  // Camada 2 (Claude) — apenas para posts de fontes proxy/aggregator, sem match camada 1,
+  // e que contêm prováveis nomes próprios. Capped para evitar blow-up de custo.
+  let claudeCalls = 0;
+  let capExceeded = false;
+  for (const p of posts) {
+    if (aliasMatchedPostIds.has(p.id)) continue;
+    const src = sourceById.get(p.source_id);
+    if (!src) continue;
+    if (src.tier !== "proxy" && src.tier !== "aggregator") continue;
+    const combined = `${p.title ?? ""} ${p.body ?? ""}`;
+    if (!hasProperNouns(combined)) continue;
+
+    if (claudeCalls >= CLAUDE_CALL_CAP_PER_COLLECT) {
+      capExceeded = true;
+      break;
+    }
+
+    try {
+      claudeCalls++;
+      const claudeMatches = await matchByClaude(
+        { id: p.id, title: p.title, body: p.body },
+        topics
+      );
+      allMatches.push(...claudeMatches);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`claude-matcher post ${p.id}: ${msg}`);
+    }
+  }
+
+  if (capExceeded) {
+    console.warn(
+      `[gossip:collector] cap Claude atingido (${CLAUDE_CALL_CAP_PER_COLLECT}) — posts restantes sem classificação camada 2`
+    );
   }
 
   await persistMatches(supabase, allMatches);
