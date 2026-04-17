@@ -106,6 +106,14 @@ async function scrapeOnePage(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
+    // tsx/esbuild injeta um helper __name nas funções compiladas; quando essas
+    // funções são serializadas e enviadas pro contexto do browser via page.evaluate,
+    // o __name não existe e quebra com "__name is not defined". Stub leve resolve.
+    await page.evaluateOnNewDocument(() => {
+      // @ts-expect-error — define no global do browser
+      if (typeof globalThis.__name === "undefined") globalThis.__name = (fn) => fn;
+    });
+
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       const url = req.url();
