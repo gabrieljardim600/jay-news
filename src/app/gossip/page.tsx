@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Settings } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { FeedFilters } from "@/components/gossip/FeedFilters";
@@ -10,6 +11,7 @@ import { SettingsDrawer } from "@/components/gossip/SettingsDrawer";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
 export default function GossipPage() {
+  const router = useRouter();
   const [sources, setSources] = useState<GossipSource[]>([]);
   const [topics, setTopics] = useState<GossipTopic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,12 @@ export default function GossipPage() {
       setLoading(false);
     })();
   }, [loadSources, loadTopics]);
+
+  useEffect(() => {
+    if (!loading && sources.length === 0) {
+      router.push("/gossip/new");
+    }
+  }, [loading, sources.length, router]);
 
   async function handleTagTopic(
     action: "confirm" | "reject",
@@ -121,17 +129,9 @@ export default function GossipPage() {
     <div className="min-h-screen max-w-3xl mx-auto px-5 py-8 pb-20">
       <AppHeader rightSlot={rightSlot} />
 
-      {loading ? (
+      {loading || sources.length === 0 ? (
         <div className="flex items-center justify-center py-16">
           <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      ) : sources.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-            <Settings className="w-6 h-6 text-text-muted" />
-          </div>
-          <p className="text-text-secondary text-[17px] font-medium mb-1">Nenhuma fonte</p>
-          <p className="text-text-muted text-[14px]">Use Settings para adicionar fontes de gossip.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-8">
