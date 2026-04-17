@@ -10,6 +10,9 @@ import { DossierGrid } from "@/components/gossip/DossierGrid";
 import { SettingsDrawer } from "@/components/gossip/SettingsDrawer";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
+type ToastKind = "info" | "success" | "error";
+type Toast = { message: string; kind: ToastKind } | null;
+
 export default function GossipPage() {
   const router = useRouter();
   const [sources, setSources] = useState<GossipSource[]>([]);
@@ -17,9 +20,17 @@ export default function GossipPage() {
   const [loading, setLoading] = useState(true);
   const [loadingCollect, setLoadingCollect] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"sources" | "topics">("sources");
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>();
   const [selectedSourceId, setSelectedSourceId] = useState<string | undefined>();
+  const [toast, setToast] = useState<Toast>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const loadSources = useCallback(async () => {
     const res = await fetch("/api/gossip/sources");
@@ -50,6 +61,16 @@ export default function GossipPage() {
     }
   }, [loading, sources.length, router]);
 
+  function openTopicsSettings() {
+    setSettingsInitialTab("topics");
+    setSettingsOpen(true);
+  }
+
+  function openSourcesSettings() {
+    setSettingsInitialTab("sources");
+    setSettingsOpen(true);
+  }
+
   async function handleTagTopic(
     action: "confirm" | "reject",
     topicId: string,
@@ -63,32 +84,40 @@ export default function GossipPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(`Erro: ${data?.error || `HTTP ${res.status}`}`);
+        setToast({ message: `Erro: ${data?.error || `HTTP ${res.status}`}`, kind: "error" });
         return;
       }
       setFeedRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(`Erro de rede: ${(err as Error).message}`);
+      setToast({ message: `Erro de rede: ${(err as Error).message}`, kind: "error" });
     }
   }
 
   async function collect() {
     if (loadingCollect) return;
     setLoadingCollect(true);
+    const activeSources = sources.filter((s) => s.active).length;
+    setToast({
+      message: `Buscando em ${activeSources} fonte${activeSources === 1 ? "" : "s"}...`,
+      kind: "info",
+    });
     try {
       const res = await fetch("/api/gossip/collect", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        alert(`Erro ao coletar: ${data?.error || `HTTP ${res.status}`}`);
+        setToast({ message: `Erro ao coletar: ${data?.error || `HTTP ${res.status}`}`, kind: "error" });
         return;
       }
       const inserted = Number(data?.inserted ?? 0);
       const errors = Array.isArray(data?.errors) ? data.errors.length : 0;
-      alert(`${inserted} post(s) novo(s) / ${errors} erro(s)`);
+      setToast({
+        message: `${inserted} post${inserted === 1 ? "" : "s"} novo${inserted === 1 ? "" : "s"}, ${errors} erro${errors === 1 ? "" : "s"}`,
+        kind: "success",
+      });
       setFeedRefreshKey((k) => k + 1);
       await loadSources();
     } catch (err) {
-      alert(`Erro de rede: ${(err as Error).message}`);
+      setToast({ message: `Erro de rede: ${(err as Error).message}`, kind: "error" });
     } finally {
       setLoadingCollect(false);
     }
@@ -109,7 +138,7 @@ export default function GossipPage() {
 
   const settingsBtn = (
     <button
-      onClick={() => setSettingsOpen(true)}
+      onClick={openSourcesSettings}
       aria-label="Configurações do Gossip"
       title="Configurações do Gossip"
       className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface transition-colors text-text-muted hover:text-text"
@@ -146,7 +175,7 @@ export default function GossipPage() {
 
           <section>
             <h2 className="text-[15px] font-semibold mb-3">Dossiês de hoje</h2>
-            <DossierGrid refreshKey={feedRefreshKey} />
+            <DossierGrid refreshKey={feedRefreshKey} onAddTopic={openTopicsSettings} />
           </section>
 
           <section>
@@ -169,7 +198,22 @@ export default function GossipPage() {
         topics={topics}
         onSourcesChange={loadSources}
         onTopicsChange={loadTopics}
+        initialTab={settingsInitialTab}
       />
+
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-surface border rounded-full px-4 py-2 shadow-lg text-[13px] font-medium ${
+            toast.kind === "success"
+              ? "border-primary/40 text-primary"
+              : toast.kind === "error"
+              ? "border-danger/40 text-danger"
+              : "border-border text-text"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ interface SettingsDrawerProps {
   topics: GossipTopic[];
   onSourcesChange: () => void;
   onTopicsChange: () => void;
+  initialTab?: Tab;
 }
 
 type Tab = "sources" | "topics";
@@ -39,12 +40,19 @@ export function SettingsDrawer({
   topics,
   onSourcesChange,
   onTopicsChange,
+  initialTab,
 }: SettingsDrawerProps) {
-  const [tab, setTab] = useState<Tab>("sources");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "sources");
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<GossipSource | undefined>();
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<GossipTopic | undefined>();
+
+  useEffect(() => {
+    if (open && initialTab) {
+      setTab(initialTab);
+    }
+  }, [open, initialTab]);
 
   useEffect(() => {
     if (!open) return;

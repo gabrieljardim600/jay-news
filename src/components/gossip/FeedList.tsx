@@ -72,9 +72,11 @@ export function FeedList({ topicId, sourceId, refreshKey, topics, onTag }: FeedL
 
   if (items.length === 0) {
     return (
-      <p className="text-[13px] text-text-muted py-6">
-        Nenhum post ainda — clique Atualizar no topo.
-      </p>
+      <div className="rounded-[14px] border border-dashed border-border p-6 bg-card-solid">
+        <p className="text-[13px] text-text-muted">
+          Coletando suas primeiras fofocas — clique Atualizar no topo.
+        </p>
+      </div>
     );
   }
 

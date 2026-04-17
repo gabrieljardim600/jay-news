@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { DossierCard } from "./DossierCard";
 import type { GossipDossier, GossipTopic } from "@/lib/gossip/types";
 
@@ -12,9 +12,10 @@ interface DossierRow {
 
 interface DossierGridProps {
   refreshKey: number;
+  onAddTopic?: () => void;
 }
 
-export function DossierGrid({ refreshKey }: DossierGridProps) {
+export function DossierGrid({ refreshKey, onAddTopic }: DossierGridProps) {
   const [rows, setRows] = useState<DossierRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,12 +81,19 @@ export function DossierGrid({ refreshKey }: DossierGridProps) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-[13px] text-text-muted">
-        Adicione topics para ver dossiês.{" "}
-        <Link href="/gossip?settings=1" className="text-primary hover:underline">
-          Abrir Settings
-        </Link>
-      </p>
+      <div className="flex flex-col items-start gap-3 rounded-[14px] border border-dashed border-border p-6 bg-card-solid">
+        <p className="text-[13px] text-text-muted">
+          Nenhum topic cadastrado — adicione pessoas, casais ou eventos para começar a receber dossiês diários.
+        </p>
+        {onAddTopic && (
+          <button
+            onClick={onAddTopic}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] font-medium bg-primary text-white hover:bg-primary-hover transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Adicione topics
+          </button>
+        )}
+      </div>
     );
   }
 
