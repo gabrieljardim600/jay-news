@@ -520,9 +520,11 @@ git commit -m "feat(gossip): api sources (CRUD)"
 
 Mesmo padrão de sources. Body do POST: `{ type, name, aliases?: string[], priority? }`.
 
-Aliases são armazenados lowercased. Se body não fornecer, array vazio — Task 17 adiciona sugestão IA depois.
+Aliases são armazenados lowercased. Se body não fornecer, array vazio — Task 20 adiciona sugestão IA depois.
 
-- [ ] **Step 1-3:** criar, typecheck, curl test.
+`[id]/route.ts` deve implementar **GET, PATCH e DELETE** (não só PATCH/DELETE). O GET é usado pela topic detail page da Task 23 — incluir agora evita descoberta tardia.
+
+- [ ] **Step 1-3:** criar (GET+POST no `route.ts`, GET+PATCH+DELETE no `[id]/route.ts`), typecheck, curl test.
 - [ ] **Step 4:** commit `feat(gossip): api topics (CRUD)`.
 
 ---
@@ -779,7 +781,7 @@ Só inclua se confidence >= 0.6. Array vazio se nada bater.`;
 Chamar `matchByClaude` apenas para posts:
 - cuja source tem `tier in ('proxy','aggregator')`,
 - que NÃO tiveram match na camada 1,
-- e que contêm `≥1 sequência de nomes próprios` (simples: `/[A-ZÀ-Ý][a-zà-ý]+(\s+[A-ZÀ-Ý][a-zà-ý]+){1,3}/`).
+- e que contêm `≥1 sequência de nomes próprios` — detecção tolerante a títulos em ALL-CAPS (padrão tablóide): `/([A-ZÀ-ÝZ][A-ZÀ-ÝZa-zà-ý]+(\s+[A-ZÀ-ÝZ][A-ZÀ-ÝZa-zà-ý]+){1,3})/` (aceita "Anitta", "ANITTA", "Bruna Marquezine").
 
 - [ ] **Step 3: Smoke test**
 
@@ -961,7 +963,7 @@ export async function generateDossiersForUser(
 - Create: `src/components/gossip/DossierCard.tsx`
 - Modify: `src/app/gossip/page.tsx`
 
-- [ ] **Step 1:** `GET /api/gossip/dossiers?date=` — retorna dossiers do user pra data (default hoje), com join em `gossip_topics` pra `name`/`type`/`image_url`.
+- [ ] **Step 1:** `GET /api/gossip/dossiers?date=` — retorna **um item por topic ativo do user** (não só quem tem dossier). Shape: `{ topic: {id,name,type,image_url,priority}, dossier: GossipDossier | null }[]`. Topics sem dossier do dia renderizam card "Dia calmo" no client (evita flicker empty-state).
 
 - [ ] **Step 2:** `POST /api/gossip/topics/[id]/refresh` — chama `generateDossierForTopic` inline (não dispara matcher; assume que já rodou no last collect). Retorna dossier atualizado.
 
@@ -1045,6 +1047,8 @@ export const maxDuration = 300;
 **Atenção:** aqui usa `SUPABASE_SERVICE_ROLE_KEY` porque precisa iterar todos usuários. Bypassa RLS — código deve filtrar manualmente por `user_id`.
 
 - [ ] **Step 2: `vercel.json`**
+
+**Atenção: merge aditivo.** Ler `vercel.json` atual primeiro, acrescentar ao array `crons` existente sem sobrescrever outras entradas (trading morning/closing etc).
 
 ```json
 {
