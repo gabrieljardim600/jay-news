@@ -94,7 +94,10 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
 
   const text = res.content[0]?.type === "text" ? res.content[0].text : "";
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) return null;
+  if (!m) {
+    console.warn(`[gossip:dossier] ${topic.name} — no JSON in Claude response. raw=${text.slice(0, 200)}`);
+    return null;
+  }
   let parsed: {
     summary?: string;
     key_quotes?: DossierQuote[];
@@ -102,10 +105,14 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
   };
   try {
     parsed = JSON.parse(m[0]);
-  } catch {
+  } catch (err) {
+    console.warn(`[gossip:dossier] ${topic.name} — JSON.parse falhou:`, err instanceof Error ? err.message : err);
     return null;
   }
-  if (!parsed.summary) return null;
+  if (!parsed.summary) {
+    console.warn(`[gossip:dossier] ${topic.name} — sem summary no JSON. parsed=${JSON.stringify(parsed).slice(0, 200)}`);
+    return null;
+  }
 
   const costCents =
     (res.usage.input_tokens / 1_000_000) * 100 +
