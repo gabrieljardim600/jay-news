@@ -5,6 +5,7 @@ import { RefreshCw, Settings } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
 import { FeedFilters } from "@/components/gossip/FeedFilters";
 import { FeedList } from "@/components/gossip/FeedList";
+import { SettingsDrawer } from "@/components/gossip/SettingsDrawer";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
 export default function GossipPage() {
@@ -75,7 +76,6 @@ export default function GossipPage() {
 
   // Silence unused warnings until wired in later tasks
   void setLoadingCollect;
-  void settingsOpen;
   void setFeedRefreshKey;
 
   return (
@@ -121,6 +121,15 @@ export default function GossipPage() {
           </section>
         </div>
       )}
+
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        sources={sources}
+        topics={topics}
+        onSourcesChange={loadSources}
+        onTopicsChange={loadTopics}
+      />
     </div>
   );
 }
