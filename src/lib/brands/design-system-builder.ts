@@ -132,7 +132,10 @@ Your task: produce a single JSON object with this shape:
 }
 
 Rules for color classification:
-- Primary = the dominant brand chrome color. Must be in the top of the list by occurrence.
+- Primary = the single most identifiable BRAND chrome color (what a human would name if asked "what color is this brand"). Examples: XP Investimentos → yellow, Nubank → purple, Itaú → orange. It's almost never white, black, or gray.
+- Do NOT pick white/near-white as primary — that goes to "background".
+- Do NOT pick pure black/near-black as primary unless the brand is genuinely black-on-white monochrome AND no saturated brand color exists.
+- Among saturated (non-gray) colors, prefer the one that appears most often across multiple sources.
 - Secondary & accent are OPTIONAL. Only pick them if they clearly repeat across multiple sources AND have at least ~30% of the primary's occurrence count. If unsure, return null — returning null is strongly preferred over guessing.
 - Reject "UI state indicator" colors unless they clearly dominate the chrome:
     * green (#0a9e5a, #16a34a, #22c55e, etc.) = up/positive/success indicator — common in fintech tickers
