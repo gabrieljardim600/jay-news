@@ -61,12 +61,24 @@ export async function collectGossipForUser(
       bySource.push({ source_id: src.id, label: src.label, count: addedIds.length, status: "ok" });
       await supabase
         .from("gossip_sources")
-        .update({ last_fetched_at: new Date().toISOString() })
+        .update({
+          last_fetched_at: new Date().toISOString(),
+          last_error: null,
+          last_post_count: posts.length,
+        })
         .eq("id", src.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${src.label}: ${msg}`);
       bySource.push({ source_id: src.id, label: src.label, count: 0, status: "error", error: msg });
+      await supabase
+        .from("gossip_sources")
+        .update({
+          last_fetched_at: new Date().toISOString(),
+          last_error: msg.slice(0, 500),
+          last_post_count: 0,
+        })
+        .eq("id", src.id);
     }
   }
 
@@ -86,7 +98,61 @@ export async function collectGossipForUser(
     }
   }
 
+  // Self-heal: re-roda alias matching em posts dos últimos 7d que não têm
+  // nenhum match. Isso cobre posts coletados antes do topic existir, ou
+  // quando o matching falhou em runs anteriores.
+  try {
+    const backfilled = await backfillUnmatchedPosts(supabase, userId);
+    matchesCreated += backfilled;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`backfill-matching: ${msg}`);
+  }
+
   return { fetched, inserted, errors, bySource, insertedPostIds, matchesCreated };
+}
+
+async function backfillUnmatchedPosts(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data: topicRows } = await supabase
+    .from("gossip_topics")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("active", true);
+  const topics = (topicRows ?? []) as GossipTopic[];
+  if (topics.length === 0) return 0;
+
+  const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+  const { data: postRows } = await supabase
+    .from("gossip_posts")
+    .select("id, title, body")
+    .eq("user_id", userId)
+    .gte("published_at", since)
+    .limit(2000);
+  const posts = (postRows ?? []) as Array<{ id: string; title: string | null; body: string | null }>;
+  if (posts.length === 0) return 0;
+
+  // Busca quais posts já têm alguma entrada em gossip_post_topics
+  const ids = posts.map((p) => p.id);
+  const { data: existing } = await supabase
+    .from("gossip_post_topics")
+    .select("post_id")
+    .in("post_id", ids);
+  const alreadyMatched = new Set((existing ?? []).map((r) => r.post_id as string));
+
+  const unmatched = posts.filter((p) => !alreadyMatched.has(p.id));
+  if (unmatched.length === 0) return 0;
+
+  const results: MatchResult[] = [];
+  for (const p of unmatched) {
+    const ms = matchByAliases({ id: p.id, title: p.title, body: p.body }, topics);
+    results.push(...ms);
+  }
+  if (results.length === 0) return 0;
+  await persistMatches(supabase, results);
+  return results.length;
 }
 
 async function runMatchingForInsertedPosts(

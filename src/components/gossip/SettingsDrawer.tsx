@@ -25,6 +25,19 @@ const PLATFORM_LABEL: Record<string, string> = {
   reddit: "Reddit",
 };
 
+function relativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0 || Number.isNaN(diff)) return null;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "agora";
+  if (m < 60) return `${m}min atrás`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h atrás`;
+  const d = Math.floor(h / 24);
+  return `${d}d atrás`;
+}
+
 const TYPE_LABEL: Record<string, string> = {
   person: "Pessoa",
   couple: "Casal",
@@ -141,10 +154,15 @@ export function SettingsDrawer({
               )}
 
               <div className="flex flex-col gap-1.5">
-                {sources.map((s) => (
+                {sources.map((s) => {
+                  const fetched = relativeTime(s.last_fetched_at);
+                  const hasError = !!s.last_error;
+                  return (
                   <div
                     key={s.id}
-                    className="flex items-center justify-between p-3 rounded-[10px] bg-surface"
+                    className={`flex items-center justify-between p-3 rounded-[10px] ${
+                      hasError ? "bg-danger/5 border border-danger/20" : "bg-surface"
+                    }`}
                   >
                     <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -154,6 +172,22 @@ export function SettingsDrawer({
                         </span>
                       </div>
                       <span className="text-[11px] text-text-muted truncate">{s.handle}</span>
+                      {hasError ? (
+                        <span
+                          className="text-[11px] text-danger truncate"
+                          title={s.last_error ?? undefined}
+                        >
+                          ⚠ {s.last_error}
+                        </span>
+                      ) : fetched ? (
+                        <span className="text-[11px] text-text-muted">
+                          {s.last_post_count} posts · {fetched}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-text-muted italic">
+                          Sem coleta ainda
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 ml-2 shrink-0">
                       <button
@@ -186,7 +220,8 @@ export function SettingsDrawer({
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ) : (

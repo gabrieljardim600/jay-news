@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
 import { AppHeader } from "@/components/ui/AppHeader";
+import { FeedList } from "@/components/gossip/FeedList";
 import type { GossipDossier, GossipTopic, SpikeLevel } from "@/lib/gossip/types";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -67,6 +68,7 @@ export default function TopicDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [toast, setToast] = useState<{ message: string; kind: "info" | "success" | "error" } | null>(null);
 
   useEffect(() => {
@@ -127,12 +129,13 @@ export default function TopicDetailPage() {
       } else {
         setToast({ message: "Sem posts novos hoje", kind: "info" });
       }
-      // Recarrega timeline
+      // Recarrega timeline e posts
       const dossiersRes = await fetch(`/api/gossip/topics/${topicId}/dossiers?limit=30`);
       if (dossiersRes.ok) {
         const dossiersData = (await dossiersRes.json()) as GossipDossier[];
         setDossiers(Array.isArray(dossiersData) ? dossiersData : []);
       }
+      setFeedRefreshKey((k) => k + 1);
     } catch (err) {
       setToast({ message: `Erro de rede: ${(err as Error).message}`, kind: "error" });
     } finally {
@@ -241,8 +244,21 @@ export default function TopicDetailPage() {
             </button>
           </div>
 
+          {topic && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-[15px] font-semibold">
+                Posts recentes sobre {topic.name}
+              </h2>
+              <FeedList
+                topicId={topic.id}
+                refreshKey={feedRefreshKey}
+                topics={[topic]}
+              />
+            </section>
+          )}
+
           <section className="flex flex-col gap-3">
-            <h2 className="text-[15px] font-semibold">Timeline</h2>
+            <h2 className="text-[15px] font-semibold">Timeline de dossiês</h2>
             {dossiers.length === 0 ? (
               <p className="text-[13px] text-text-muted py-6">
                 Ainda não há dossiês para este topic.

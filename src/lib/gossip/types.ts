@@ -13,6 +13,8 @@ export interface GossipSource {
   tier: GossipSourceTier;
   active: boolean;
   last_fetched_at: string | null;
+  last_error: string | null;
+  last_post_count: number;
   created_at: string;
   updated_at: string;
 }

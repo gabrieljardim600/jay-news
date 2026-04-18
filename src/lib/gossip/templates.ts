@@ -11,10 +11,10 @@ export interface SourceTemplate {
 
 export const SOURCE_TEMPLATES: SourceTemplate[] = [
   // === RSS BR — primary ===
-  { platform: "rss", handle: "https://revistaquem.globo.com/rss/ultimas/feed.xml", label: "Quem", tier: "primary", region: "br", category: "tabloid" },
-  { platform: "rss", handle: "https://f5.folha.uol.com.br/rss.xml", label: "F5/UOL", tier: "primary", region: "br", category: "tabloid" },
-  { platform: "rss", handle: "https://www.purepeople.com.br/rss.xml", label: "Purepeople BR", tier: "primary", region: "br", category: "tabloid" },
-  { platform: "rss", handle: "https://contigo.uol.com.br/rss.xml", label: "Contigo", tier: "primary", region: "br", category: "tabloid" },
+  { platform: "rss", handle: "https://f5.folha.uol.com.br/rss091.xml", label: "F5/UOL", tier: "primary", region: "br", category: "tabloid" },
+  { platform: "rss", handle: "https://contigo.com.br/feed", label: "Contigo", tier: "primary", region: "br", category: "tabloid" },
+  { platform: "rss", handle: "https://g1.globo.com/rss/g1/pop-arte/", label: "G1 Pop & Arte", tier: "primary", region: "br", category: "tabloid" },
+  { platform: "rss", handle: "https://natelinha.uol.com.br/rss", label: "NaTelinha", tier: "primary", region: "br", category: "tabloid" },
 
   // === RSS INT — primary ===
   { platform: "rss", handle: "https://www.tmz.com/rss.xml", label: "TMZ", tier: "primary", region: "int", category: "tabloid" },
@@ -36,9 +36,9 @@ export const SOURCE_TEMPLATES: SourceTemplate[] = [
   { platform: "twitter", handle: "PopTingz", label: "Pop Tingz", tier: "proxy", region: "int", category: "proxy" },
 
   // === YouTube BR — primary ===
-  { platform: "youtube", handle: "@MatheusMazzafera", label: "Matheus Mazzafera", tier: "primary", region: "br", category: "video" },
-  { platform: "youtube", handle: "@Foquinha", label: "Foquinha", tier: "primary", region: "br", category: "video" },
+  { platform: "youtube", handle: "@Foquinhaa", label: "Foquinha", tier: "primary", region: "br", category: "video" },
   { platform: "youtube", handle: "@PodDelas", label: "PodDelas", tier: "primary", region: "br", category: "video" },
+  { platform: "youtube", handle: "@quemnatvoficial", label: "Quem Na TV", tier: "primary", region: "br", category: "video" },
 
   // === Reddit — aggregator ===
   { platform: "reddit", handle: "r/Fauxmoi", label: "r/Fauxmoi", tier: "aggregator", region: "int", category: "community" },
