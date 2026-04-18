@@ -33,8 +33,6 @@ export async function generateDossierForTopic(
   topic: GossipTopic,
   date: Date = new Date()
 ): Promise<GossipDossier | null> {
-  const start = new Date(date.getTime() - 24 * 3600_000).toISOString();
-
   // 1) IDs de posts vinculados ao topic (excluindo manual_negative)
   const { data: linkRows, error: linkErr } = await supabase
     .from("gossip_post_topics")
@@ -46,20 +44,30 @@ export async function generateDossierForTopic(
   const linkedIds = Array.from(new Set((linkRows ?? []).map((r) => r.post_id as string)));
   if (linkedIds.length === 0) return null;
 
-  // 2) Fetch posts das últimas 24h do user, filtrando pelos IDs linkados
-  const { data: postRows, error: postErr } = await supabase
-    .from("gossip_posts")
-    .select(
-      "id, title, body, url, author, published_at, gossip_sources ( label, tier )"
-    )
-    .eq("user_id", userId)
-    .gte("published_at", start)
-    .in("id", linkedIds)
-    .order("published_at", { ascending: false })
-    .limit(40);
-  if (postErr) throw postErr;
+  // 2) Fetch posts do user filtrando pelos IDs linkados.
+  //    Tenta janela de 24h primeiro; se vazio, cai pra 7 dias.
+  async function fetchPosts(hoursBack: number) {
+    const startIso = new Date(date.getTime() - hoursBack * 3600_000).toISOString();
+    const { data, error } = await supabase
+      .from("gossip_posts")
+      .select(
+        "id, title, body, url, author, published_at, gossip_sources ( label, tier )"
+      )
+      .eq("user_id", userId)
+      .gte("published_at", startIso)
+      .in("id", linkedIds)
+      .order("published_at", { ascending: false })
+      .limit(40);
+    if (error) throw error;
+    return (data ?? []) as PostForDossier[];
+  }
 
-  const posts = (postRows ?? []) as PostForDossier[];
+  let posts = await fetchPosts(24);
+  let windowDays = 1;
+  if (posts.length === 0) {
+    posts = await fetchPosts(24 * 7);
+    windowDays = 7;
+  }
   if (posts.length === 0) return null;
 
   const spike = await calcSpikeForTopic(supabase, userId, topic.id, date);
@@ -72,8 +80,9 @@ export async function generateDossierForTopic(
     })
     .join("\n\n");
 
+  const windowLabel = windowDays === 1 ? "últimas 24h" : `últimos ${windowDays} dias`;
   const prompt = `Topic: ${topic.name} (${topic.type})
-Posts das últimas 24h (${posts.length}):
+Posts dos ${windowLabel} (${posts.length}):
 ${postsBlock}
 
 Retorne JSON estrito:

@@ -16,6 +16,19 @@ function initial(name: string): string {
   return name.trim().slice(0, 1).toUpperCase();
 }
 
+function relativeDateLabel(dateStr: string): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateStr === today) return null;
+  const d = new Date(`${dateStr}T00:00:00`);
+  const now = new Date();
+  const diffDays = Math.round(
+    (now.getTime() - d.getTime()) / (24 * 3600_000)
+  );
+  if (diffDays === 1) return "ontem";
+  if (diffDays > 1 && diffDays <= 7) return `há ${diffDays} dias`;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
 function spikeBadge(level: SpikeLevel | null | undefined) {
   if (level === "high") {
     return (
@@ -44,7 +57,8 @@ export function DossierCard({ topic, dossier, onRefreshed }: DossierCardProps) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  const summary = dossier?.summary ?? `Dia calmo — sem novidade sobre ${topic.name}.`;
+  const summary = dossier?.summary ?? `Sem novidade recente sobre ${topic.name}. Clique em atualizar pra buscar.`;
+  const staleLabel = dossier ? relativeDateLabel(dossier.date) : null;
 
   async function handleRefresh(e: React.MouseEvent) {
     e.stopPropagation();
@@ -96,6 +110,14 @@ export function DossierCard({ topic, dossier, onRefreshed }: DossierCardProps) {
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-[14px] font-semibold text-text truncate">{topic.name}</h3>
             {spikeBadge(dossier?.spike_level ?? null)}
+            {staleLabel && (
+              <span
+                className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium bg-surface text-text-muted"
+                title={`Dossiê de ${dossier?.date}`}
+              >
+                {staleLabel}
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-text-muted capitalize">{topic.type}</p>
         </div>

@@ -28,17 +28,24 @@ export async function GET(request: Request) {
   }
 
   const topicIds = topics.map((t) => t.id);
+  // Busca dossiês dos últimos 7 dias pra ter fallback quando não tem do dia.
+  const fallbackStart = new Date(new Date(date).getTime() - 6 * 24 * 3600_000)
+    .toISOString()
+    .slice(0, 10);
   const { data: dossierRows, error: dossErr } = await supabase
     .from("gossip_dossiers")
     .select("*")
     .eq("user_id", user.id)
-    .eq("date", date)
-    .in("topic_id", topicIds);
+    .gte("date", fallbackStart)
+    .lte("date", date)
+    .in("topic_id", topicIds)
+    .order("date", { ascending: false });
   if (dossErr) return NextResponse.json({ error: dossErr.message }, { status: 500 });
 
+  // Mantém o mais recente por topic (lista já vem ordenada desc).
   const byTopic = new Map<string, GossipDossier>();
   for (const d of (dossierRows ?? []) as GossipDossier[]) {
-    byTopic.set(d.topic_id, d);
+    if (!byTopic.has(d.topic_id)) byTopic.set(d.topic_id, d);
   }
 
   const out = topics.map((t) => ({
