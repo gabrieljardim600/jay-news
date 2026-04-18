@@ -67,14 +67,24 @@ export function matchByAliases(
     const needles = collectNeedles(t);
     for (const alias of needles) {
       if (alias.length < 3) continue;
-      const re = new RegExp(`\\b${escapeRegex(alias)}\\b`, "i");
-      if (re.test(haystack)) {
+      if (aliasMatches(haystack, alias)) {
         matches.push({ post_id: post.id, topic_id: t.id, confidence: 1.0, matched_by: "alias" });
         break;
       }
     }
   }
   return matches;
+}
+
+// Acrônimos curtos (<=4, sem espaço, alfanumérico) são tratados como prefixo:
+// "bbb" casa com "bbb", "bbb26", "bbb25", "#bbb", "bbbrasil". Aliases mais
+// longos exigem boundary de palavra dos dois lados (evita falso positivo tipo
+// "anittaola" batendo em "anitta").
+function aliasMatches(haystack: string, alias: string): boolean {
+  const isShortAcronym = alias.length <= 4 && /^[a-z0-9]+$/.test(alias);
+  const escaped = escapeRegex(alias);
+  const pattern = isShortAcronym ? `\\b${escaped}\\w*` : `\\b${escaped}\\b`;
+  return new RegExp(pattern, "i").test(haystack);
 }
 
 // Sempre inclui o próprio nome do topic + aliases. Para "person" também

@@ -121,10 +121,15 @@ export default function GossipPage() {
         return;
       }
       const inserted = Number(data?.inserted ?? 0);
-      const errors = Array.isArray(data?.errors) ? data.errors.length : 0;
+      const bySource = Array.isArray(data?.bySource) ? (data.bySource as Array<{ label: string; status: string }>) : [];
+      const failed = bySource.filter((s) => s.status === "error").map((s) => s.label);
+      const base = `${inserted} post${inserted === 1 ? "" : "s"} novo${inserted === 1 ? "" : "s"}`;
+      const msg = failed.length > 0
+        ? `${base} · falharam: ${failed.slice(0, 4).join(", ")}${failed.length > 4 ? ` +${failed.length - 4}` : ""}`
+        : base;
       setToast({
-        message: `${inserted} post${inserted === 1 ? "" : "s"} novo${inserted === 1 ? "" : "s"}, ${errors} erro${errors === 1 ? "" : "s"}`,
-        kind: "success",
+        message: msg,
+        kind: failed.length > 0 ? "error" : "success",
       });
       setFeedRefreshKey((k) => k + 1);
       await loadSources();

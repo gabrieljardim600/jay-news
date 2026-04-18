@@ -7,26 +7,24 @@ const parser = new Parser({
 });
 
 export async function fetchGossipRss(source: GossipSource): Promise<GossipPostInput[]> {
-  try {
-    const feed = await parser.parseURL(source.handle);
-    return (feed.items ?? [])
-      .filter((item) => item.link)
-      .map((item) => ({
-        source_id: source.id,
-        platform: "rss" as const,
-        external_id: String(item.guid ?? item.link!),
-        url: item.link!,
-        author: item.creator ?? item.author ?? null,
-        title: item.title ?? null,
-        body: stripHtml(item.contentSnippet ?? item.content ?? ""),
-        image_url: extractImage(item as Record<string, unknown>),
-        published_at: item.isoDate ?? new Date().toISOString(),
-        raw: item,
-      }));
-  } catch (err) {
-    console.error(`[gossip:rss] erro em ${source.handle}:`, err);
-    return [];
-  }
+  // Deixa o erro borbulhar — o collector captura por fonte e reporta na UI.
+  // Sem isso, feeds quebrados falhavam silenciosamente e o usuário não
+  // conseguia descobrir que a URL está 404.
+  const feed = await parser.parseURL(source.handle);
+  return (feed.items ?? [])
+    .filter((item) => item.link)
+    .map((item) => ({
+      source_id: source.id,
+      platform: "rss" as const,
+      external_id: String(item.guid ?? item.link!),
+      url: item.link!,
+      author: item.creator ?? item.author ?? null,
+      title: item.title ?? null,
+      body: stripHtml(item.contentSnippet ?? item.content ?? ""),
+      image_url: extractImage(item as Record<string, unknown>),
+      published_at: item.isoDate ?? new Date().toISOString(),
+      raw: item,
+    }));
 }
 
 function stripHtml(input: string): string {
