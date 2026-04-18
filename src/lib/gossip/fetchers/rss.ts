@@ -10,7 +10,23 @@ export async function fetchGossipRss(source: GossipSource): Promise<GossipPostIn
   // Deixa o erro borbulhar — o collector captura por fonte e reporta na UI.
   // Sem isso, feeds quebrados falhavam silenciosamente e o usuário não
   // conseguia descobrir que a URL está 404.
-  const feed = await parser.parseURL(source.handle);
+  let feed;
+  try {
+    feed = await parser.parseURL(source.handle);
+  } catch (err) {
+    // Fallback: alguns feeds BR (F5, etc.) têm entities inválidas. Baixa o
+    // XML e sanitiza entidades/caracteres de controle antes de reparsear.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/invalid character|unexpected|unclosed|entity/i.test(msg)) throw err;
+    const res = await fetch(source.handle, {
+      headers: { "User-Agent": "jay-news-gossip/1.0 (+https://jay-news.vercel.app)" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} (fallback fetch)`);
+    const xml = (await res.text())
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F]/g, "")
+      .replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, "&amp;");
+    feed = await parser.parseString(xml);
+  }
   return (feed.items ?? [])
     .filter((item) => item.link)
     .map((item) => ({

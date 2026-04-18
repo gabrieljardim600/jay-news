@@ -21,7 +21,13 @@ export async function matchByClaude(
 ): Promise<MatchResult[]> {
   if (topics.length === 0) return [];
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  const prompt = `Dado o post, quais desses topics são mencionados?
+  const prompt = `Você classifica se um post é explicitamente sobre algum topic da lista.
+
+REGRAS:
+- Só retorne match se o post cita o topic DIRETAMENTE (nome ou alias exato).
+- NÃO inferir por tema parecido. Ex: #BBMAs não é BBB. Grammy não é Oscar. "Globo" não é "BBB" só porque BBB passa na Globo.
+- Pessoas: exige o nome/sobrenome. Não casar por contexto (mesma empresa, mesmo programa).
+- Se só há menção indireta ou contextual, retorne vazio.
 
 POST:
 Título: ${post.title ?? ""}
@@ -30,7 +36,7 @@ Corpo: ${(post.body ?? "").slice(0, 800)}
 TOPICS:
 ${topics.map((t, i) => `${i + 1}. ${t.name} (${t.type}) — aliases: ${t.aliases.join(", ")}`).join("\n")}
 
-Responda JSON: {"matches":[{"topic_index":1,"confidence":0.8}]}. Só inclua confidence >= 0.6. Array vazio se nada bater.`;
+Responda JSON: {"matches":[{"topic_index":1,"confidence":0.9}]}. Só inclua confidence >= 0.85 (muito alto). Array vazio se nada bater diretamente.`;
 
   const res = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
@@ -44,7 +50,7 @@ Responda JSON: {"matches":[{"topic_index":1,"confidence":0.8}]}. Só inclua conf
   try {
     const parsed = JSON.parse(m[0]) as { matches?: Array<{ topic_index: number; confidence: number }> };
     return (parsed.matches ?? [])
-      .filter((mItem) => mItem.confidence >= 0.6 && topics[mItem.topic_index - 1])
+      .filter((mItem) => mItem.confidence >= 0.85 && topics[mItem.topic_index - 1])
       .map((mItem) => ({
         post_id: post.id,
         topic_id: topics[mItem.topic_index - 1].id,

@@ -21,7 +21,6 @@ export const SOURCE_TEMPLATES: SourceTemplate[] = [
   { platform: "rss", handle: "https://pagesix.com/feed/", label: "Page Six", tier: "primary", region: "int", category: "tabloid" },
   { platform: "rss", handle: "https://www.dailymail.co.uk/tvshowbiz/index.rss", label: "Daily Mail Showbiz", tier: "primary", region: "int", category: "tabloid" },
   { platform: "rss", handle: "https://www.eonline.com/syndication/rss/news.xml", label: "E! News", tier: "primary", region: "int", category: "tabloid" },
-  { platform: "rss", handle: "https://people.com/feed/", label: "People", tier: "primary", region: "int", category: "tabloid" },
 
   // === Twitter BR — proxy ===
   { platform: "twitter", handle: "hugogloss", label: "Hugo Gloss", tier: "proxy", region: "br", category: "proxy" },
