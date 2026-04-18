@@ -8,6 +8,8 @@ import { FeedFilters } from "@/components/gossip/FeedFilters";
 import { FeedList } from "@/components/gossip/FeedList";
 import { DossierGrid } from "@/components/gossip/DossierGrid";
 import { SettingsDrawer } from "@/components/gossip/SettingsDrawer";
+import { TopicFormModal } from "@/components/gossip/TopicFormModal";
+import { SourceFormModal } from "@/components/gossip/SourceFormModal";
 import type { GossipSource, GossipTopic } from "@/lib/gossip/types";
 
 type ToastKind = "info" | "success" | "error";
@@ -21,6 +23,8 @@ export default function GossipPage() {
   const [loadingCollect, setLoadingCollect] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<"sources" | "topics">("sources");
+  const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const [newSourceOpen, setNewSourceOpen] = useState(false);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>();
   const [selectedSourceId, setSelectedSourceId] = useState<string | undefined>();
@@ -69,6 +73,14 @@ export default function GossipPage() {
   function openSourcesSettings() {
     setSettingsInitialTab("sources");
     setSettingsOpen(true);
+  }
+
+  function openNewTopic() {
+    setNewTopicOpen(true);
+  }
+
+  function openNewSource() {
+    setNewSourceOpen(true);
   }
 
   async function handleTagTopic(
@@ -171,11 +183,13 @@ export default function GossipPage() {
             selectedSourceId={selectedSourceId}
             onTopicChange={setSelectedTopicId}
             onSourceChange={setSelectedSourceId}
+            onAddTopic={openNewTopic}
+            onAddSource={openNewSource}
           />
 
           <section>
             <h2 className="text-[15px] font-semibold mb-3">Dossiês de hoje</h2>
-            <DossierGrid refreshKey={feedRefreshKey} onAddTopic={openTopicsSettings} />
+            <DossierGrid refreshKey={feedRefreshKey} onAddTopic={openNewTopic} />
           </section>
 
           <section>
@@ -199,6 +213,25 @@ export default function GossipPage() {
         onSourcesChange={loadSources}
         onTopicsChange={loadTopics}
         initialTab={settingsInitialTab}
+      />
+
+      <TopicFormModal
+        open={newTopicOpen}
+        onClose={() => setNewTopicOpen(false)}
+        onSaved={() => {
+          loadTopics();
+          setFeedRefreshKey((k) => k + 1);
+          setToast({ message: "Topic criado", kind: "success" });
+        }}
+      />
+
+      <SourceFormModal
+        open={newSourceOpen}
+        onClose={() => setNewSourceOpen(false)}
+        onSaved={() => {
+          loadSources();
+          setToast({ message: "Fonte criada", kind: "success" });
+        }}
       />
 
       {toast && (

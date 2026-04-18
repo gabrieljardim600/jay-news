@@ -107,6 +107,19 @@ export function DossierGrid({ refreshKey, onAddTopic }: DossierGridProps) {
           onRefreshed={(d) => handleRefreshed(r.topic.id, d)}
         />
       ))}
+      {onAddTopic && (
+        <button
+          onClick={onAddTopic}
+          className="group rounded-[14px] border border-dashed border-border p-4 flex flex-col items-center justify-center gap-2 min-h-[148px] bg-card-solid hover:border-primary/60 hover:bg-surface transition-all duration-200"
+        >
+          <span className="w-10 h-10 rounded-full bg-surface group-hover:bg-primary/10 flex items-center justify-center text-text-muted group-hover:text-primary transition-colors">
+            <Plus className="w-4 h-4" />
+          </span>
+          <span className="text-[12px] font-medium text-text-muted group-hover:text-text transition-colors">
+            Novo topic
+          </span>
+        </button>
+      )}
     </div>
   );
 }
