@@ -66,11 +66,6 @@ export function DigestFeed({ mode }: DigestFeedProps) {
     [cache.configs, mode],
   );
 
-  // Redirect to wizard only when we're certain user has zero configs at all.
-  useEffect(() => {
-    if (cache.configsReady && cache.configs.length === 0) router.replace("/wizard");
-  }, [cache.configsReady, cache.configs.length, router]);
-
   // Pick the active config for this mode.
   useEffect(() => {
     if (!cache.configsReady) return;
