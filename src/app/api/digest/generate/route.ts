@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       .from("digest_configs")
       .select("id, user_id")
       .eq("is_active", true)
+      .eq("auto_generate", true)
       .gte("digest_time", currentHour)
       .lt("digest_time", nextHour);
 

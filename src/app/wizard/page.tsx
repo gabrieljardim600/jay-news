@@ -24,7 +24,7 @@ export default function WizardPage() {
   const [sources, setSources] = useState<WizardSource[]>([]);
   const [language, setLanguage] = useState("pt-BR");
   const [summaryStyle, setSummaryStyle] = useState("executive");
-  const [digestTime, setDigestTime] = useState("07:00");
+  const [digestTime, setDigestTime] = useState("10:00");
   const [maxArticles, setMaxArticles] = useState(20);
   const [exclusions, setExclusions] = useState<string[]>([]);
 

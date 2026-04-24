@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/digest/generate",
-      "schedule": "0 10 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/markets-collect",

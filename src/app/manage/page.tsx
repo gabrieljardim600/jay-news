@@ -134,14 +134,17 @@ function ConfigCard({
   onRun,
   onDelete,
   onViewDigest,
+  onToggleAuto,
 }: {
   data: ConfigWithRuns;
   onRun: () => void;
   onDelete: () => void;
   onViewDigest: (digestId: string) => void;
+  onToggleAuto: (id: string, next: boolean) => Promise<void>;
 }) {
   const [showRuns, setShowRuns] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [togglingAuto, setTogglingAuto] = useState(false);
   const router = useRouter();
   const { genState } = useGeneration();
 
@@ -288,6 +291,44 @@ function ConfigCard({
           </div>
         )}
 
+        {/* Automatic daily toggle */}
+        <div
+          className="rounded-[10px] p-3 mb-3 flex items-start justify-between gap-3"
+          style={{ background: "var(--color-surface)" }}
+        >
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold">Geração automática diária</p>
+            <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+              {config.auto_generate
+                ? `Ativa — roda todo dia às ${config.digest_time.slice(0, 5)} (UTC).`
+                : "Desativada — só roda quando você clicar em Rodar."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={config.auto_generate}
+            disabled={togglingAuto}
+            onClick={async () => {
+              setTogglingAuto(true);
+              try {
+                await onToggleAuto(config.id, !config.auto_generate);
+              } finally {
+                setTogglingAuto(false);
+              }
+            }}
+            className={`relative shrink-0 w-10 h-6 rounded-full transition-colors ${
+              config.auto_generate ? "bg-success" : "bg-surface-light border border-border"
+            } ${togglingAuto ? "opacity-60 cursor-wait" : "cursor-pointer"}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                config.auto_generate ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
         {/* Action buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           <Button
@@ -415,6 +456,32 @@ export default function ManagePage() {
     loadAll();
   }
 
+  async function handleToggleAuto(configId: string, next: boolean) {
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((item) =>
+        item.config.id === configId
+          ? { ...item, config: { ...item.config, auto_generate: next } }
+          : item
+      )
+    );
+    const res = await fetch("/api/digest-configs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: configId, auto_generate: next }),
+    });
+    if (!res.ok) {
+      // Rollback
+      setItems((prev) =>
+        prev.map((item) =>
+          item.config.id === configId
+            ? { ...item, config: { ...item.config, auto_generate: !next } }
+            : item
+        )
+      );
+    }
+  }
+
   function handleViewDigest(digestId: string) {
     router.push(`/?digestId=${digestId}`);
   }
@@ -436,7 +503,7 @@ export default function ManagePage() {
         trend_keywords: keywords.length > 0 ? keywords : undefined,
         language: "pt-BR",
         summary_style: "detailed",
-        digest_time: "07:00",
+        digest_time: "10:00",
         max_articles: 25,
       }),
     });
@@ -514,6 +581,7 @@ export default function ManagePage() {
               onRun={() => handleRun(item.config.id)}
               onDelete={() => handleDelete(item.config.id)}
               onViewDigest={handleViewDigest}
+              onToggleAuto={handleToggleAuto}
             />
           ))}
         </div>
