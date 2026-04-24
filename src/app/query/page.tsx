@@ -366,7 +366,7 @@ function Stepper({ step }: { step: Step }) {
     { n: 3, label: "Relatório" },
   ];
   return (
-    <div className="flex items-center gap-2 mb-6">
+    <div className="flex flex-wrap items-center gap-2 mb-6">
       {steps.map((s, i) => {
         const active = step === s.n;
         const done = step > s.n;
@@ -703,10 +703,10 @@ function StepResults({
   return (
     <div>
       <div className="p-4 rounded-[14px] border border-border bg-surface mb-5">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Alvo</p>
-            <p className="text-[18px] font-semibold truncate">{result.entity.name}</p>
+            <p className="text-[18px] font-semibold break-words leading-tight">{result.entity.name}</p>
           </div>
           <Button variant="outline" size="sm" onClick={onRefresh} loading={refreshing} className="rounded-full shrink-0">
             <RefreshCw className="w-3.5 h-3.5 mr-1" /> Atualizar
@@ -775,13 +775,13 @@ function BlockView({ block }: { block: ResearchBlock }) {
   const hasItems = Array.isArray(block.items) && block.items.length > 0;
   const hasMeta = block.meta && Object.keys(block.meta).length > 0;
   return (
-    <div className="px-4 py-3.5">
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="text-[13px] font-semibold">{block.label}</span>
-        <span className="text-[10px] text-text-muted px-1.5 h-4 inline-flex items-center rounded-full bg-background">
+    <div className="px-4 py-3.5 min-w-0">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2.5">
+        <span className="text-[13px] font-semibold break-words min-w-0">{block.label}</span>
+        <span className="text-[10px] text-text-muted px-1.5 h-4 inline-flex items-center rounded-full bg-background break-all max-w-full">
           {block.providerId}
         </span>
-        {hasItems && <span className="text-[10px] text-text-muted ml-auto">{block.items!.length} resultados</span>}
+        {hasItems && <span className="text-[10px] text-text-muted ml-auto shrink-0">{block.items!.length} resultados</span>}
       </div>
       {hasItems ? (
         <ul className="flex flex-col gap-2">
@@ -790,16 +790,16 @@ function BlockView({ block }: { block: ResearchBlock }) {
           ))}
         </ul>
       ) : hasMeta ? (
-        <dl className="grid grid-cols-[minmax(100px,max-content)_1fr] gap-x-3 gap-y-1 text-[12px]">
+        <dl className="flex flex-col gap-2 text-[12px] sm:grid sm:grid-cols-[minmax(100px,max-content)_1fr] sm:gap-x-3 sm:gap-y-1">
           {Object.entries(block.meta!).map(([k, v]) => (
-            <div key={k} className="contents">
+            <div key={k} className="sm:contents">
               <dt className="text-text-muted font-medium">{k}</dt>
-              <dd className="text-text-secondary break-words">{v}</dd>
+              <dd className="text-text-secondary break-words min-w-0">{v}</dd>
             </div>
           ))}
         </dl>
       ) : (
-        <p className="text-[12px] text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
+        <p className="text-[12px] text-text-secondary whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">
           {block.text}
         </p>
       )}
@@ -811,8 +811,8 @@ function ItemCard({ item }: { item: ParsedItem }) {
   const host = hostOf(item.url);
   const date = fmtDate(item.date);
   return (
-    <li className="p-3 rounded-[10px] border border-border bg-background hover:border-text-muted/40 transition-colors">
-      <div className="flex items-start gap-2">
+    <li className="p-3 rounded-[10px] border border-border bg-background hover:border-text-muted/40 transition-colors overflow-hidden">
+      <div className="flex items-start gap-2 min-w-0">
         <div className="flex-1 min-w-0">
           {item.url ? (
             <a
@@ -842,7 +842,9 @@ function ItemCard({ item }: { item: ParsedItem }) {
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center px-2 h-5 rounded-full bg-background text-text-secondary">{children}</span>
+    <span className="inline-flex items-center px-2 min-h-5 py-0.5 rounded-full bg-background text-text-secondary max-w-full break-all">
+      {children}
+    </span>
   );
 }
 
@@ -1031,14 +1033,14 @@ function StepBriefing({
   return (
     <div>
       <div className="p-4 rounded-[14px] border border-border bg-surface mb-4">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
               Briefing · {briefing.profile.label}
             </p>
-            <p className="text-[18px] font-semibold truncate">{briefing.entity.name}</p>
+            <p className="text-[18px] font-semibold break-words leading-tight">{briefing.entity.name}</p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
             <button
               onClick={copyMarkdown}
               className="h-8 px-2.5 flex items-center gap-1 rounded-full text-[11px] border border-border bg-background text-text-secondary hover:text-text hover:border-text-muted/50 transition-colors"
@@ -1153,9 +1155,9 @@ function SectionCard({ section, value }: { section: OutputSection; value: unknow
     : section.kind === "keyvalue" && value && typeof value === "object" ? Object.keys(value as object).length
     : null;
   return (
-    <section className={`p-4 rounded-[14px] border ${empty ? "border-border/60 bg-surface/40" : "border-border bg-surface"}`}>
-      <div className="flex items-baseline justify-between gap-2 mb-2">
-        <h3 className="text-[13px] font-semibold tracking-tight">{section.title}</h3>
+    <section className={`p-4 rounded-[14px] border ${empty ? "border-border/60 bg-surface/40" : "border-border bg-surface"} overflow-hidden`}>
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <h3 className="text-[13px] font-semibold tracking-tight break-words min-w-0">{section.title}</h3>
         {count !== null && !empty && (
           <span className="text-[10px] text-text-muted">{count} {section.kind === "list" ? (count === 1 ? "item" : "itens") : (count === 1 ? "campo" : "campos")}</span>
         )}
@@ -1164,22 +1166,22 @@ function SectionCard({ section, value }: { section: OutputSection; value: unknow
       {empty ? (
         <p className="text-[12px] text-text-muted">Nenhum dado encontrado para essa seção. Tente afrouxar a busca estrita ou rodar com <em>Atualizar</em>.</p>
       ) : section.kind === "paragraph" ? (
-        <p className="text-[13.5px] text-text leading-relaxed whitespace-pre-wrap">{String(value)}</p>
+        <p className="text-[13.5px] text-text leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{String(value)}</p>
       ) : section.kind === "list" ? (
         <ul className="flex flex-col gap-1.5 text-[13px]">
           {(value as unknown[]).map((item, i) => (
-            <li key={i} className="flex gap-2">
+            <li key={i} className="flex gap-2 min-w-0">
               <span className="text-primary font-semibold shrink-0 leading-snug">·</span>
-              <span className="text-text leading-snug">{typeof item === "string" ? item : JSON.stringify(item)}</span>
+              <span className="text-text leading-snug break-words [overflow-wrap:anywhere] min-w-0">{typeof item === "string" ? item : JSON.stringify(item)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <dl className="grid grid-cols-[minmax(130px,max-content)_1fr] gap-x-3 gap-y-1 text-[13px]">
+        <dl className="flex flex-col gap-2.5 text-[13px] sm:grid sm:grid-cols-[minmax(130px,max-content)_1fr] sm:gap-x-3 sm:gap-y-1">
           {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-text-muted font-medium">{k}</dt>
-              <dd className="text-text break-words">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+            <div key={k} className="flex flex-col gap-0.5 sm:contents">
+              <dt className="text-text-muted font-medium text-[11px] uppercase tracking-wide sm:text-[13px] sm:normal-case sm:tracking-normal">{k}</dt>
+              <dd className="text-text break-words [overflow-wrap:anywhere] min-w-0">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
             </div>
           ))}
         </dl>
