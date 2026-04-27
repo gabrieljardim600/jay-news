@@ -33,7 +33,8 @@ export interface CollectReport {
 
 export async function collectGossipForUser(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  accountId?: string | null
 ): Promise<CollectReport> {
   const { data: sources, error } = await supabase
     .from("gossip_sources")
@@ -55,7 +56,7 @@ export async function collectGossipForUser(
     try {
       const posts = await fetchForSource(src);
       fetched += posts.length;
-      const { addedIds } = await upsertPosts(supabase, userId, posts);
+      const { addedIds } = await upsertPosts(supabase, userId, posts, accountId);
       inserted += addedIds.length;
       insertedPostIds.push(...addedIds);
       bySource.push({ source_id: src.id, label: src.label, count: addedIds.length, status: "ok" });
@@ -248,11 +249,12 @@ async function fetchForSource(src: GossipSource): Promise<GossipPostInput[]> {
 async function upsertPosts(
   supabase: SupabaseClient,
   userId: string,
-  posts: GossipPostInput[]
+  posts: GossipPostInput[],
+  accountId?: string | null
 ): Promise<{ addedIds: string[] }> {
   if (posts.length === 0) return { addedIds: [] };
 
-  const rows = posts.map((p) => ({ ...p, user_id: userId }));
+  const rows = posts.map((p) => ({ ...p, user_id: userId, account_id: accountId ?? null }));
 
   const { data, error } = await supabase
     .from("gossip_posts")

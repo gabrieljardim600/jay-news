@@ -23,19 +23,34 @@ export async function GET(req: Request) {
     .eq("active", true);
   const userIds = Array.from(new Set((userRows ?? []).map((r) => r.user_id as string)));
 
+  // Resolve default_account_id por user (multi-tenant). null = legacy / sem account.
+  const accountByUser = new Map<string, string | null>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("user_id, default_account_id")
+      .in("user_id", userIds);
+    for (const p of profiles ?? []) {
+      accountByUser.set(p.user_id as string, (p.default_account_id as string | null) ?? null);
+    }
+  }
+
   const results: Array<{
     user_id: string;
+    account_id: string | null;
     inserted: number;
     dossiers: number;
     errors: string[];
   }> = [];
 
   for (const uid of userIds) {
+    const accountId = accountByUser.get(uid) ?? null;
     try {
-      const report = await collectGossipForUser(admin, uid);
-      const dossiers = await generateDossiersForUser(admin, uid);
+      const report = await collectGossipForUser(admin, uid, accountId);
+      const dossiers = await generateDossiersForUser(admin, uid, accountId);
       results.push({
         user_id: uid,
+        account_id: accountId,
         inserted: report.inserted,
         dossiers: dossiers.length,
         errors: report.errors,
@@ -43,6 +58,7 @@ export async function GET(req: Request) {
     } catch (err) {
       results.push({
         user_id: uid,
+        account_id: accountId,
         inserted: 0,
         dossiers: 0,
         errors: [String(err)],

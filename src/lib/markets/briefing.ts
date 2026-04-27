@@ -129,7 +129,7 @@ Regras:
 export async function generateCompetitorBriefing(
   marketId: string,
   competitorId: string,
-  opts?: { profileId?: string; accountId?: string | null },
+  opts?: { profileId?: string; accountId?: string | null; existingBriefingId?: string },
 ): Promise<{ briefingId: string }> {
   const svc = serviceClient();
 
@@ -149,21 +149,38 @@ export async function generateCompetitorBriefing(
     }
   }
 
-  const { data: row, error: insertErr } = await svc
-    .from("competitor_briefings")
-    .insert({
-      market_id: marketId,
-      competitor_id: competitorId,
-      account_id: opts?.accountId ?? null,
-      status: "processing",
-      model_used: MODEL,
-      profile_slug: profile?.slug ?? null,
-      profile_label: profile?.label ?? null,
-    })
-    .select()
-    .single();
-  if (insertErr || !row) throw new Error(insertErr?.message || "Failed to create briefing row");
-  const briefingId = row.id;
+  // Reusa row existente quando v1 endpoint criou placeholder; senão cria nova.
+  let briefingId: string;
+  if (opts?.existingBriefingId) {
+    const { error: updErr } = await svc
+      .from("competitor_briefings")
+      .update({
+        status: "processing",
+        model_used: MODEL,
+        profile_slug: profile?.slug ?? null,
+        profile_label: profile?.label ?? null,
+        started_at: new Date().toISOString(),
+      })
+      .eq("id", opts.existingBriefingId);
+    if (updErr) throw new Error(updErr.message);
+    briefingId = opts.existingBriefingId;
+  } else {
+    const { data: row, error: insertErr } = await svc
+      .from("competitor_briefings")
+      .insert({
+        market_id: marketId,
+        competitor_id: competitorId,
+        account_id: opts?.accountId ?? null,
+        status: "processing",
+        model_used: MODEL,
+        profile_slug: profile?.slug ?? null,
+        profile_label: profile?.label ?? null,
+      })
+      .select()
+      .single();
+    if (insertErr || !row) throw new Error(insertErr?.message || "Failed to create briefing row");
+    briefingId = row.id;
+  }
 
   try {
     const [{ data: market }, { data: competitor }, { data: articles }] = await Promise.all([

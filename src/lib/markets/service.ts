@@ -57,8 +57,10 @@ export async function runMarketCollection(marketId: string): Promise<RunResult> 
 
     if (collected.length > 0) {
       // Upsert on (market_id, source_url) — update mentions/score on conflict
+      const marketAccountId = (ctx.market as { account_id?: string | null }).account_id ?? null;
       const rows = collected.map((a) => ({
         market_id: marketId,
+        account_id: marketAccountId,
         title: a.title,
         source_name: a.source_name,
         source_url: a.source_url,

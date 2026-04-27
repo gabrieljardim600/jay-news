@@ -80,12 +80,7 @@ export const POST = withService(async (req, ctx) => {
 
   after(async () => {
     try {
-      await createAndRunLightScrape(supabase, input);
-      // Mark placeholder as superseded — the function above creates its own row
-      await supabase
-        .from("brand_scrapes")
-        .update({ status: "superseded", error: "placeholder for v1 endpoint" })
-        .eq("id", placeholderId);
+      await createAndRunLightScrape(supabase, { ...input, existingScrapeId: placeholderId });
     } catch (err) {
       await supabase
         .from("brand_scrapes")

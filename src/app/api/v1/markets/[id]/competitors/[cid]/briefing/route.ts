@@ -32,30 +32,14 @@ export const POST = withService<unknown, Params>(async (req, ctx, { params }) =>
     return NextResponse.json({ error: { message: "Competitor not found" } }, { status: 404 });
   }
 
-  // generateCompetitorBriefing creates a row in 'processing' state and runs
-  // pipeline inline. Wrap it in after() so the HTTP request returns fast and
-  // the client can poll the briefing row.
-  // IMPORTANT: insert the briefing row synchronously here so we can return its id.
-  // The pipeline finishes the row asynchronously via after().
-
-  // Quick approach: call generateCompetitorBriefing in the after() block, but we
-  // need an ID to return. We pre-insert here, then pass to the pipeline. Simpler
-  // workaround: just call it synchronously — the function returns briefingId
-  // after creating the row but BEFORE running the AI part (try/catch around it).
-  // Actually reading briefing.ts: it creates the row in processing, runs the
-  // pipeline (Tavily + Claude) inline, then updates. So we should wrap the AI
-  // work via after(). Refactor: split into create + run. For now, accept that
-  // the request may take a few seconds while it kicks off; we return as soon as
-  // the row exists by NOT awaiting the AI part. But generateCompetitorBriefing
-  // does await it. So we run in after() and use a separate insert here.
-
+  // Cria row imediatamente pra retornar id; pipeline reutiliza via existingBriefingId
   const { data: row, error: insertErr } = await supabase
     .from("competitor_briefings")
     .insert({
       market_id: marketId,
       competitor_id: cid,
       account_id: ctx.account_id,
-      status: "processing",
+      status: "queued",
     })
     .select("id")
     .single();
@@ -69,19 +53,11 @@ export const POST = withService<unknown, Params>(async (req, ctx, { params }) =>
 
   after(async () => {
     try {
-      // Run the pipeline. It will create its own row, but we want to use ours.
-      // For MVP we accept that there will be 2 rows: the placeholder (above)
-      // and the actual one from the pipeline. The placeholder is harmless.
-      // TODO: refactor briefing.ts to accept an existing briefingId.
       await generateCompetitorBriefing(marketId, cid, {
         profileId,
         accountId: ctx.account_id,
+        existingBriefingId: briefingId,
       });
-      // Mark placeholder as a duplicate so UI ignores it
-      await supabase
-        .from("competitor_briefings")
-        .update({ status: "superseded", error: "placeholder for v1 endpoint" })
-        .eq("id", briefingId);
     } catch (err) {
       console.error(`[v1/briefing] failed for ${cid}:`, err);
       await supabase

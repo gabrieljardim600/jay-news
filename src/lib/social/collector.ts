@@ -23,7 +23,7 @@ interface CollectResult {
   errors: string[];
 }
 
-export async function collectForUser(supabase: SupabaseClient, userId: string): Promise<CollectResult> {
+export async function collectForUser(supabase: SupabaseClient, userId: string, accountId?: string | null): Promise<CollectResult> {
   const errors: string[] = [];
   const reports: SourceReport[] = [];
 
@@ -57,7 +57,7 @@ export async function collectForUser(supabase: SupabaseClient, userId: string): 
       reports.push({ kind: "voice", label: v.label, platform: v.platform, fetched: 0, upserted: 0, status: "empty" });
       continue;
     }
-    const rows = posts.map((p) => toRow(userId, p, { voice_id: v.id, crowd_source_id: null }));
+    const rows = posts.map((p) => toRow(userId, accountId, p, { voice_id: v.id, crowd_source_id: null }));
     const { error, data } = await supabase
       .from("social_posts")
       .upsert(rows, { onConflict: "user_id,platform,external_id", ignoreDuplicates: false })
@@ -85,7 +85,7 @@ export async function collectForUser(supabase: SupabaseClient, userId: string): 
       reports.push({ kind: "crowd", label: cs.label, platform: cs.platform, fetched: 0, upserted: 0, status: "empty" });
       continue;
     }
-    const rows = posts.map((p) => toRow(userId, p, { voice_id: null, crowd_source_id: cs.id }));
+    const rows = posts.map((p) => toRow(userId, accountId, p, { voice_id: null, crowd_source_id: cs.id }));
     const { error, data } = await supabase
       .from("social_posts")
       .upsert(rows, { onConflict: "user_id,platform,external_id", ignoreDuplicates: false })
@@ -109,9 +109,10 @@ export async function collectForUser(supabase: SupabaseClient, userId: string): 
   };
 }
 
-function toRow(userId: string, p: SocialPostInput, refs: { voice_id: string | null; crowd_source_id: string | null }) {
+function toRow(userId: string, accountId: string | null | undefined, p: SocialPostInput, refs: { voice_id: string | null; crowd_source_id: string | null }) {
   return {
     user_id: userId,
+    account_id: accountId ?? null,
     voice_id: refs.voice_id,
     crowd_source_id: refs.crowd_source_id,
     platform: p.platform,

@@ -14,6 +14,7 @@ export interface CreateScrapeInput {
   engine?: ScrapeEngine;
   parceiroId?: string | null;
   accountId?: string | null;
+  existingScrapeId?: string;
 }
 
 /**
@@ -61,25 +62,35 @@ export async function createAndRunLightScrape(
   const rootUrl = normalizeUrl(input.rootUrl);
   const domain = extractDomain(rootUrl);
 
-  const { data: scrape, error: insertErr } = await supabase
-    .from("brand_scrapes")
-    .insert({
-      user_id: input.userId,
-      account_id: input.accountId ?? null,
-      root_url: rootUrl,
-      domain,
-      urls_to_scrape: input.urls ?? [],
-      status: "crawling",
-      engine: "light",
-      intent: input.intent ?? null,
-      parceiro_id: input.parceiroId ?? null,
-      started_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+  let scrapeId: string;
+  if (input.existingScrapeId) {
+    const { error: updErr } = await supabase
+      .from("brand_scrapes")
+      .update({ status: "crawling", started_at: new Date().toISOString() })
+      .eq("id", input.existingScrapeId);
+    if (updErr) throw new Error(updErr.message);
+    scrapeId = input.existingScrapeId;
+  } else {
+    const { data: scrape, error: insertErr } = await supabase
+      .from("brand_scrapes")
+      .insert({
+        user_id: input.userId,
+        account_id: input.accountId ?? null,
+        root_url: rootUrl,
+        domain,
+        urls_to_scrape: input.urls ?? [],
+        status: "crawling",
+        engine: "light",
+        intent: input.intent ?? null,
+        parceiro_id: input.parceiroId ?? null,
+        started_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
 
-  if (insertErr || !scrape) throw new Error(insertErr?.message ?? "Falha ao criar scrape");
-  const scrapeId = scrape.id as string;
+    if (insertErr || !scrape) throw new Error(insertErr?.message ?? "Falha ao criar scrape");
+    scrapeId = scrape.id as string;
+  }
 
   try {
     // 1. Crawl se não veio URL explícita

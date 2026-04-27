@@ -31,7 +31,8 @@ export async function generateDossierForTopic(
   supabase: SupabaseClient,
   userId: string,
   topic: GossipTopic,
-  date: Date = new Date()
+  date: Date = new Date(),
+  accountId?: string | null
 ): Promise<GossipDossier | null> {
   // 1) IDs de posts vinculados ao topic (excluindo manual_negative)
   const { data: linkRows, error: linkErr } = await supabase
@@ -130,6 +131,7 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
 
   const row = {
     user_id: userId,
+    account_id: accountId ?? null,
     topic_id: topic.id,
     date: date.toISOString().slice(0, 10),
     summary: parsed.summary,
@@ -154,7 +156,8 @@ Se não houver fato novo, summary = "Dia calmo — sem novidade quente sobre ${t
 
 export async function generateDossiersForUser(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  accountId?: string | null
 ): Promise<GossipDossier[]> {
   const { data: topics } = await supabase
     .from("gossip_topics")
@@ -165,7 +168,7 @@ export async function generateDossiersForUser(
   const results: GossipDossier[] = [];
   for (const topic of (topics ?? []) as GossipTopic[]) {
     try {
-      const d = await generateDossierForTopic(supabase, userId, topic);
+      const d = await generateDossierForTopic(supabase, userId, topic, new Date(), accountId);
       if (d) results.push(d);
     } catch (err) {
       console.error(`[gossip:dossier] erro em ${topic.name}:`, err);
