@@ -1,6 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
-import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
 
 export type ServiceCtx = {
@@ -20,7 +19,6 @@ export class ServiceAuthError extends Error {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!;
 
 let adminClient: SupabaseClient | null = null;
 function getAdminClient(): SupabaseClient {
@@ -45,26 +43,7 @@ function isUuid(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
 
-async function mintAccountJwt(account_id: string, user_id: string | null): Promise<string> {
-  const secret = new TextEncoder().encode(JWT_SECRET);
-  return await new SignJWT({
-    role: "authenticated",
-    account_id,
-    external_user_id: user_id,
-  })
-    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-    .setIssuedAt()
-    .setExpirationTime("5m")
-    .setSubject(`service:social:${account_id}`)
-    .setAudience("authenticated")
-    .sign(secret);
-}
-
 export async function requireService(req: Request): Promise<ServiceCtx> {
-  if (!JWT_SECRET) {
-    throw new ServiceAuthError(500, "SUPABASE_JWT_SECRET not configured");
-  }
-
   const serviceSlug = requireHeader(req, "x-service");
   const serviceKey = requireHeader(req, "x-service-key");
   const accountId = requireHeader(req, "x-account-id");
@@ -126,18 +105,30 @@ export function requireRole(ctx: ServiceCtx, minRole: ServiceCtx["role"]): void 
 }
 
 /**
- * Returns a Supabase client whose queries run as `authenticated` with
- * `account_id` claim — RLS policies on v1 tables filter using
- * `(auth.jwt() ->> 'account_id')::uuid`.
+ * Returns the admin (service_role) Supabase client. Tenant isolation in v1
+ * routes is application-level: every query MUST filter by `account_id`.
+ *
+ * Helper `byAccount(query, ctx)` enforces this. RLS column-policies (added
+ * per-table in later migrations) provide defense-in-depth for any client
+ * that does NOT use service_role.
  */
-export async function accountClient(ctx: ServiceCtx): Promise<SupabaseClient> {
-  const jwt = await mintAccountJwt(ctx.account_id, ctx.user_id);
-  return createClient(SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      headers: { Authorization: `Bearer ${jwt}` },
-    },
-  });
+export function accountClient(_ctx: ServiceCtx): SupabaseClient {
+  return getAdminClient();
+}
+
+/**
+ * Apply the mandatory `account_id` filter to a Supabase query.
+ *
+ * Usage:
+ *   const supabase = accountClient(ctx);
+ *   const q = supabase.from('digests').select('*');
+ *   const { data } = await byAccount(q, ctx);
+ */
+export function byAccount<Q extends { eq: (col: string, val: string) => Q }>(
+  query: Q,
+  ctx: ServiceCtx
+): Q {
+  return query.eq("account_id", ctx.account_id);
 }
 
 /** Wrap a route handler with service auth + uniform error mapping. */
