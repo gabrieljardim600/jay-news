@@ -105,6 +105,14 @@ export default function SocialPage() {
           <TabButton active={tab === "crowd"} onClick={() => setTab("crowd")} label="Pulso" icon={Megaphone} />
         </div>
 
+        <a
+          href="/social/brands"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-surface hover:bg-surface-light text-text-secondary hover:text-text transition-colors text-[12px] font-medium"
+        >
+          <Megaphone className="w-3.5 h-3.5" />
+          Marcas
+        </a>
+
         <button
           onClick={() => setManagerOpen(true)}
           className="ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-surface hover:bg-surface-light text-text-secondary hover:text-text transition-colors text-[12px] font-medium"
