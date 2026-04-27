@@ -131,14 +131,19 @@ export function byAccount<Q extends { eq: (col: string, val: string) => Q }>(
   return query.eq("account_id", ctx.account_id);
 }
 
-/** Wrap a route handler with service auth + uniform error mapping. */
-export function withService<T>(
-  handler: (req: Request, ctx: ServiceCtx) => Promise<T>
-): (req: Request) => Promise<Response> {
-  return async (req: Request) => {
+/** Wrap a route handler with service auth + uniform error mapping. Supports
+ *  Next.js App Router second-arg `{ params }` for dynamic routes. */
+export function withService<T, P = Record<string, never>>(
+  handler: (
+    req: Request,
+    ctx: ServiceCtx,
+    routeCtx: { params: Promise<P> }
+  ) => Promise<T>
+): (req: Request, routeCtx: { params: Promise<P> }) => Promise<Response> {
+  return async (req: Request, routeCtx: { params: Promise<P> }) => {
     try {
       const ctx = await requireService(req);
-      const result = await handler(req, ctx);
+      const result = await handler(req, ctx, routeCtx);
       if (result instanceof Response) return result;
       return NextResponse.json(result);
     } catch (err) {
