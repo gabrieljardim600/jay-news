@@ -13,6 +13,7 @@ export interface CreateScrapeInput {
   intent?: ScrapeIntent;
   engine?: ScrapeEngine;
   parceiroId?: string | null;
+  accountId?: string | null;
 }
 
 /**
@@ -30,6 +31,7 @@ export async function createDeepScrapeJob(
     .from("brand_scrapes")
     .insert({
       user_id: input.userId,
+      account_id: input.accountId ?? null,
       root_url: rootUrl,
       domain,
       urls_to_scrape: input.urls ?? [],
@@ -63,6 +65,7 @@ export async function createAndRunLightScrape(
     .from("brand_scrapes")
     .insert({
       user_id: input.userId,
+      account_id: input.accountId ?? null,
       root_url: rootUrl,
       domain,
       urls_to_scrape: input.urls ?? [],

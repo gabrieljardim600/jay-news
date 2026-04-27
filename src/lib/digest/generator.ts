@@ -30,7 +30,8 @@ function getServiceClient() {
 export async function initializeDigest(
   userId: string,
   type: "scheduled" | "on_demand",
-  digestConfigId?: string
+  digestConfigId?: string,
+  accountId?: string | null
 ): Promise<{ digestId: string; settings: Settings; topics: Topic[]; sources: RssSource[]; alerts: Alert[]; exclusions: Exclusion[] }> {
   const supabase = getServiceClient();
 
@@ -73,6 +74,7 @@ export async function initializeDigest(
     .from("digests")
     .insert({
       user_id: userId,
+      account_id: accountId ?? null,
       type,
       status: "processing",
       digest_config_id: digestConfigId || null,
@@ -147,7 +149,8 @@ export async function runDigestPipeline(
   topics: Topic[],
   sources: RssSource[],
   alerts: Alert[],
-  exclusions: Exclusion[]
+  exclusions: Exclusion[],
+  accountId?: string | null
 ): Promise<void> {
   const supabase = getServiceClient();
 
@@ -254,6 +257,7 @@ export async function runDigestPipeline(
       const alertIds = new Set(alerts.map((a) => a.id));
       const articleRows = trendsPublishable.map((a) => ({
         digest_id: digestId,
+        account_id: accountId ?? null,
         topic_id: safeId(a.topic_id, trendsTopicIds),
         alert_id: safeId(a.alert_id, alertIds),
         title: a.title, source_name: a.source_name, source_url: a.source_url,
@@ -509,6 +513,7 @@ export async function runDigestPipeline(
     const alertIds = new Set(alerts.map((a) => a.id));
     const articleRows = publishable.map((a) => ({
       digest_id: digestId,
+      account_id: accountId ?? null,
       topic_id: safeId(a.topic_id, topicIds),
       alert_id: safeId(a.alert_id, alertIds),
       title: a.title,
