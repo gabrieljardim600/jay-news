@@ -129,7 +129,7 @@ Regras:
 export async function generateCompetitorBriefing(
   marketId: string,
   competitorId: string,
-  opts?: { profileId?: string },
+  opts?: { profileId?: string; accountId?: string | null },
 ): Promise<{ briefingId: string }> {
   const svc = serviceClient();
 
@@ -154,6 +154,7 @@ export async function generateCompetitorBriefing(
     .insert({
       market_id: marketId,
       competitor_id: competitorId,
+      account_id: opts?.accountId ?? null,
       status: "processing",
       model_used: MODEL,
       profile_slug: profile?.slug ?? null,
