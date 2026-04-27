@@ -106,12 +106,6 @@ Audit RLS via `scripts/v1-smoke.sh`.
 
 ## Trade-offs / TODOs
 
-- **Briefings duplo-row**: rota v1 cria placeholder e o pipeline existente
-  cria o real; placeholder fica `status='superseded'`. Refatorar
-  `briefing.ts` pra aceitar `briefingId` existente.
-- **Crons antigos**: cron de gossip/social roda escopado por `user_id` e
-  não popula `account_id` automaticamente. Definir mapping
-  `user_id → default_account_id` ou rodar cron por account.
 - **JWT secret**: middleware ainda usa service_role + filtro app-level. Quando
   `SUPABASE_JWT_SECRET` for setado, migrar pra JWT minting com claim
   `account_id` e RLS via `auth.jwt() ->> 'account_id'`. Policies já criadas.
@@ -119,6 +113,13 @@ Audit RLS via `scripts/v1-smoke.sh`.
   implementado. Front consome via polling.
 - **Rate limit**: middleware sem rate limit ainda; só edge function
   `jsocial-news-proxy` tem in-memory 120/min por (user, account).
+- **Crons → account_id propagado via `profiles.default_account_id`**: usuários
+  sem `default_account_id` setado não veem dados gerados por cron. Solução
+  futura: rodar cron por account ao invés de por user.
+
+### Resolvidos
+- ~~Briefings duplo-row~~ — `briefing.ts` aceita `existingBriefingId`.
+- ~~Brand scrapes duplo-row~~ — `service.ts` aceita `existingScrapeId`.
 
 ## Procedimentos operacionais
 
