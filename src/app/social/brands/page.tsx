@@ -433,10 +433,16 @@ function AddTargetModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
             <>
               <Field label="Plataforma">
                 <select value={platform} onChange={(e) => setPlatform(e.target.value as SocialBrandPlatform)} className="w-full h-10 px-3 bg-surface border border-border rounded-lg text-[13px]">
-                  <option value="instagram">Instagram (Business/Creator pública)</option>
-                  <option value="facebook_page">Facebook Page</option>
-                  <option value="meta_ads">Meta Ad Library (anúncios)</option>
+                  <option value="instagram">Instagram (Business/Creator pública) ✓</option>
+                  <option value="facebook_page">Facebook Page (requer review do app)</option>
+                  <option value="meta_ads">Meta Ad Library (requer verificação de identidade)</option>
                 </select>
+                {platform === "facebook_page" && (
+                  <p className="text-[11px] text-warning mt-1">⚠ App precisa de &quot;Page Public Content Access&quot; aprovado pela Meta. Submeta pra review em developers.facebook.com.</p>
+                )}
+                {platform === "meta_ads" && (
+                  <p className="text-[11px] text-warning mt-1">⚠ Confirme identidade em facebook.com/ads/library/api antes de usar.</p>
+                )}
               </Field>
               <Field label={platform === "meta_ads" ? "Termo de busca ou page:<id>" : "Username / page slug"}>
                 <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder={platform === "instagram" ? "natura" : platform === "facebook_page" ? "natura" : "natura  ou  page:1234567890"} className="w-full h-10 px-3 bg-surface border border-border rounded-lg text-[13px]" />
