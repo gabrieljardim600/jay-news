@@ -47,10 +47,11 @@ export async function POST(request: Request) {
   );
 
   try {
+    // intent constraint aceita só whitelabel|inspiration|competitor — usamos whitelabel
     const id = await createAndRunLightScrape(supabase, {
       userId,
       rootUrl: body.url,
-      intent: body.intent ?? "brand_import",
+      intent: "whitelabel",
     });
 
     // 4. Light scrape termina síncrono dentro do helper. Re-busca o row
