@@ -8,12 +8,11 @@ import {
 import { createAndRunLightScrape, createDeepScrapeJob } from "@/lib/brands/service";
 import { isValidWebDomain } from "@/lib/sources/validate-url";
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 
 export const maxDuration = 300;
 
 const SELECT_COLS =
-  "id, root_url, domain, status, intent, title, favicon_url, total_assets, total_colors, design_system, started_at, finished_at, created_at, parceiro_id";
+  "id, root_url, domain, status, intent, title, favicon_url, total_assets, total_colors, design_system, started_at, finished_at, created_at, parceiro_id, error";
 
 export const GET = withService(async (_req, ctx) => {
   const supabase = accountClient(ctx);
@@ -54,42 +53,15 @@ export const POST = withService(async (req, ctx) => {
     return NextResponse.json({ data: { id, status: "pending", engine: "deep" } });
   }
 
-  // Light: pre-create row, run pipeline async via after()
-  const { data: row, error: insertErr } = await supabase
-    .from("brand_scrapes")
-    .insert({
-      user_id: ctx.user_id,
-      account_id: ctx.account_id,
-      root_url: rootUrl,
-      domain: new URL(rootUrl.startsWith("http") ? rootUrl : `https://${rootUrl}`).hostname,
-      urls_to_scrape: input.urls ?? [],
-      status: "pending",
-      engine: "light",
-      intent: input.intent ?? null,
-      parceiro_id: input.parceiroId ?? null,
-    })
-    .select("id")
-    .single();
-  if (insertErr || !row) {
-    return NextResponse.json(
-      { error: { message: insertErr?.message || "Failed to create scrape" } },
-      { status: 500 }
-    );
+  // Light: roda inline (igual ao /api/brands legado). Em after() o pipeline
+  // perdia a função antes de terminar e o row ficava preso em pending.
+  try {
+    const id = await createAndRunLightScrape(supabase, input);
+    return NextResponse.json({
+      data: { id, status: "completed", engine: "light" },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro ao executar scrape";
+    return NextResponse.json({ error: { message } }, { status: 500 });
   }
-  const placeholderId = row.id;
-
-  after(async () => {
-    try {
-      await createAndRunLightScrape(supabase, { ...input, existingScrapeId: placeholderId });
-    } catch (err) {
-      await supabase
-        .from("brand_scrapes")
-        .update({ status: "failed", error: String(err) })
-        .eq("id", placeholderId);
-    }
-  });
-
-  return NextResponse.json({
-    data: { id: placeholderId, status: "pending", engine: "light" },
-  });
 });
