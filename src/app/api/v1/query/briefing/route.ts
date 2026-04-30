@@ -8,7 +8,7 @@ import {
 import { runProfileBriefing } from "@/lib/markets/briefing-profiles/synth";
 import { autoDiscoverEntity } from "@/lib/markets/research/auto-discover";
 import type { ResearchCompetitor, ResearchMarket } from "@/lib/markets/research/types";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 export const maxDuration = 300;
 
@@ -100,10 +100,10 @@ export const POST = withService(async (req, ctx) => {
     });
     const payload = { ...result, discovery: { discovered: discovery.discovered } };
 
-    // Persiste no histórico
-    supabase
-      .from("query_runs")
-      .insert({
+    // Persiste no histórico — usa `after()` pra garantir que rode
+    // depois do response sem ser cortado pelo runtime.
+    after(async () => {
+      const { error } = await supabase.from("query_runs").insert({
         user_id: ctx.user_id,
         account_id: ctx.account_id,
         kind: "briefing",
@@ -115,10 +115,9 @@ export const POST = withService(async (req, ctx) => {
         module_ids: profile.module_ids,
         result: payload,
         duration_ms: result.durationMs,
-      })
-      .then(({ error }) => {
-        if (error) console.error("[v1 query_runs insert]", error);
       });
+      if (error) console.error("[v1 query_runs insert]", error);
+    });
 
     return NextResponse.json({ data: payload });
   } catch (e) {
