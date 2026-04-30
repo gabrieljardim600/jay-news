@@ -76,13 +76,27 @@ export async function generateBriefingForAccount(
 
   const prompt = `Você é um analista de inteligência competitiva. Abaixo estão posts e anúncios novos das últimas 36h das marcas que o usuário está monitorando.
 
-Gere um BRIEFING EXECUTIVO em português (5-10 bullets), destacando:
-- Padrões/tendências entre as marcas (ex: várias falando do mesmo tema)
-- Lançamentos, promoções, mudanças de mensagem
-- Anúncios pagos novos (kind=ad) e o que sugerem sobre estratégia
-- Marcas silenciadas vs ativas
+Gere um BRIEFING EXECUTIVO em português, em markdown bem estruturado. Use sub-headers (###) e bullets curtos.
 
-Seja direto. Formato markdown. Sem cabeçalho — só os bullets.
+ESTRUTURA OBRIGATÓRIA (use ### como sub-headers, mantenha a ordem):
+
+### Tendências cross-brand
+2-4 bullets sobre padrões que aparecem em mais de uma marca (mesmo tema, mesma narrativa, mesmo formato). Se nenhum padrão claro: 1 bullet dizendo isso.
+
+### Lançamentos e movimentos
+2-4 bullets com lançamentos, promoções, mudanças de mensagem ou pivôs estratégicos. Cite a marca em **bold** logo no início do bullet.
+
+### Anúncios pagos
+2-3 bullets analisando ads (kind=ad). O que a estratégia paga sugere? Quais marcas estão ativas? Se não houver ads novos, diga "Nenhum ad novo no período" e pule.
+
+### Marcas em foco vs silenciadas
+1-2 bullets identificando: quem postou muito, quem ficou parado, e o que isso pode indicar.
+
+REGRAS DE ESTILO:
+- Comece cada bullet por nome da marca em **negrito** quando a observação for sobre uma marca específica
+- Bullets curtos — 1 a 2 linhas cada
+- Sem introdução, sem conclusão, sem despedida
+- Markdown puro (### para headers, ** para bold, - para bullets)
 
 Conteúdo:
 ${items}`;
