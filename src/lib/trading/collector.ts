@@ -5,6 +5,7 @@ import {
   MORNING_QUERIES, CLOSING_QUERIES, FINANCIAL_RSS,
   HIGH_IMPACT_EVENTS, SENTIMENT_CONFIG,
 } from "./sources";
+import { fetchAllQuotes, type Quote } from "./quotes";
 
 type MarketBucket = {
   label: string;
@@ -23,6 +24,10 @@ export type CollectedTradingData = {
   marketBuckets: MarketBucket[];
   headlines: Headline[];
   agenda: AgendaEvent[];
+  /** Cotações estruturadas (Yahoo Finance) — IBOV, USD/BRL, S&P, etc. com
+   *  números reais. Injetadas no prompt pra LLM ter de onde extrair em vez
+   *  de depender de Tavily search retornar o número certo. */
+  quotes: Quote[];
   sentiment: {
     fear_greed: number | null;
     fear_greed_label: string | null;
@@ -154,11 +159,12 @@ async function fetchSentiment(): Promise<CollectedTradingData["sentiment"]> {
 }
 
 export async function collectTradingData(edition: TradingEdition): Promise<CollectedTradingData> {
-  const [marketBuckets, headlines, agenda, sentiment] = await Promise.all([
+  const [marketBuckets, headlines, agenda, sentiment, quotes] = await Promise.all([
     fetchMarketData(edition),
     fetchFinancialNews(),
     fetchAgenda(),
     fetchSentiment(),
+    fetchAllQuotes(),
   ]);
-  return { marketBuckets, headlines, agenda, sentiment };
+  return { marketBuckets, headlines, agenda, sentiment, quotes };
 }

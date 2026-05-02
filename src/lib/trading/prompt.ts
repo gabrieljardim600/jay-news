@@ -1,10 +1,17 @@
 import type { CollectedTradingData } from "./collector";
+import { formatQuotesForPrompt } from "./quotes";
 
 function formatCollectedData(data: CollectedTradingData): string {
   const parts: string[] = [];
 
+  if (data.quotes.length > 0) {
+    parts.push("== COTAÇÕES OFICIAIS (Yahoo Finance, valores reais) ==");
+    parts.push(formatQuotesForPrompt(data.quotes));
+    parts.push("\nUse estes números como fonte primária pro array `indicators`. Nunca contradiga estes valores com base nos dados de busca.");
+  }
+
   if (data.marketBuckets.length > 0) {
-    parts.push("== DADOS DE MERCADO ==");
+    parts.push("\n== DADOS DE MERCADO (busca web — pra contexto e narrativa) ==");
     for (const b of data.marketBuckets) {
       parts.push(`\n--- ${b.label} (${b.global ? "Global" : "BR"}) ---`);
       for (const r of b.results) parts.push(`• ${r.title}\n  ${r.content}`);
