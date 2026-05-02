@@ -21,6 +21,14 @@
       "schedule": "0 21 * * 1-5"
     },
     {
+      "path": "/api/cron/trading-global?edition=morning",
+      "schedule": "35 9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/trading-global?edition=closing",
+      "schedule": "5 21 * * 1-5"
+    },
+    {
       "path": "/api/cron/gossip-daily",
       "schedule": "0 11 * * *"
     },
