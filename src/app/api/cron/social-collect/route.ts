@@ -40,6 +40,7 @@ export async function GET(req: Request) {
     }
   }
 
+  type Report = Awaited<ReturnType<typeof collectForAccount>>["reports"][number];
   const results: Array<{
     scope: "account" | "user";
     id: string;
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
     crowd: number;
     posts_upserted: number;
     errors: string[];
+    reports: Report[];
   }> = [];
 
   // Pass 1: account-scoped
@@ -60,6 +62,7 @@ export async function GET(req: Request) {
         crowd: r.crowdProcessed,
         posts_upserted: r.postsUpserted,
         errors: r.errors,
+        reports: r.reports,
       });
     } catch (e) {
       results.push({
@@ -69,6 +72,7 @@ export async function GET(req: Request) {
         crowd: 0,
         posts_upserted: 0,
         errors: [String(e)],
+        reports: [],
       });
     }
   }
@@ -84,6 +88,7 @@ export async function GET(req: Request) {
         crowd: r.crowdProcessed,
         posts_upserted: r.postsUpserted,
         errors: r.errors,
+        reports: r.reports,
       });
     } catch (e) {
       results.push({
@@ -93,6 +98,7 @@ export async function GET(req: Request) {
         crowd: 0,
         posts_upserted: 0,
         errors: [String(e)],
+        reports: [],
       });
     }
   }
