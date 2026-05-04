@@ -150,3 +150,110 @@ async function fetchForCrowd(c: CrowdSource): Promise<SocialPostInput[]> {
       return [];
   }
 }
+
+/**
+ * Account-scoped variant: lista voices/crowd via `account_id`, mantendo o
+ * `user_id` original de cada row no upsert (a unique key e
+ * `user_id,platform,external_id`). Usado pelo endpoint v1 e pelo cron.
+ */
+export async function collectForAccount(
+  supabase: SupabaseClient,
+  accountId: string,
+): Promise<CollectResult> {
+  const errors: string[] = [];
+  const reports: SourceReport[] = [];
+
+  const [voicesRes, crowdRes] = await Promise.all([
+    supabase
+      .from("social_voices")
+      .select("*")
+      .eq("account_id", accountId)
+      .eq("is_active", true),
+    supabase
+      .from("crowd_sources")
+      .select("*")
+      .eq("account_id", accountId)
+      .eq("is_active", true),
+  ]);
+
+  const voices: SocialVoice[] = voicesRes.data || [];
+  const crowd: CrowdSource[] = crowdRes.data || [];
+
+  let upserted = 0;
+
+  // Voices em paralelo
+  const voiceFetches = await Promise.allSettled(
+    voices.map(async (v) => ({ voice: v, posts: await fetchForVoice(v) })),
+  );
+  for (let i = 0; i < voiceFetches.length; i++) {
+    const v = voices[i];
+    const r = voiceFetches[i];
+    if (r.status === "rejected") {
+      reports.push({ kind: "voice", label: v.label, platform: v.platform, fetched: 0, upserted: 0, status: "error", error: String(r.reason).slice(0, 160) });
+      errors.push(`voice ${v.label}: ${r.reason}`);
+      continue;
+    }
+    const { posts } = r.value;
+    if (posts.length === 0) {
+      reports.push({ kind: "voice", label: v.label, platform: v.platform, fetched: 0, upserted: 0, status: "empty" });
+      continue;
+    }
+    const rows = posts.map((p) =>
+      toRow(v.user_id, accountId, p, { voice_id: v.id, crowd_source_id: null }),
+    );
+    const { error, data } = await supabase
+      .from("social_posts")
+      .upsert(rows, { onConflict: "user_id,platform,external_id", ignoreDuplicates: false })
+      .select("id");
+    if (error) {
+      reports.push({ kind: "voice", label: v.label, platform: v.platform, fetched: posts.length, upserted: 0, status: "error", error: error.message.slice(0, 160) });
+      errors.push(`voice ${v.label}: ${error.message}`);
+    } else {
+      const n = data?.length || rows.length;
+      reports.push({ kind: "voice", label: v.label, platform: v.platform, fetched: posts.length, upserted: n, status: "ok" });
+      upserted += n;
+    }
+  }
+
+  // Crowd em paralelo
+  const crowdFetches = await Promise.allSettled(
+    crowd.map(async (c) => ({ crowd: c, posts: await fetchForCrowd(c) })),
+  );
+  for (let i = 0; i < crowdFetches.length; i++) {
+    const cs = crowd[i];
+    const r = crowdFetches[i];
+    if (r.status === "rejected") {
+      reports.push({ kind: "crowd", label: cs.label, platform: cs.platform, fetched: 0, upserted: 0, status: "error", error: String(r.reason).slice(0, 160) });
+      errors.push(`crowd ${cs.label}: ${r.reason}`);
+      continue;
+    }
+    const { posts } = r.value;
+    if (posts.length === 0) {
+      reports.push({ kind: "crowd", label: cs.label, platform: cs.platform, fetched: 0, upserted: 0, status: "empty" });
+      continue;
+    }
+    const rows = posts.map((p) =>
+      toRow(cs.user_id, accountId, p, { voice_id: null, crowd_source_id: cs.id }),
+    );
+    const { error, data } = await supabase
+      .from("social_posts")
+      .upsert(rows, { onConflict: "user_id,platform,external_id", ignoreDuplicates: false })
+      .select("id");
+    if (error) {
+      reports.push({ kind: "crowd", label: cs.label, platform: cs.platform, fetched: posts.length, upserted: 0, status: "error", error: error.message.slice(0, 160) });
+      errors.push(`crowd ${cs.label}: ${error.message}`);
+    } else {
+      const n = data?.length || rows.length;
+      reports.push({ kind: "crowd", label: cs.label, platform: cs.platform, fetched: posts.length, upserted: n, status: "ok" });
+      upserted += n;
+    }
+  }
+
+  return {
+    voicesProcessed: voices.length,
+    crowdProcessed: crowd.length,
+    postsUpserted: upserted,
+    reports,
+    errors,
+  };
+}
