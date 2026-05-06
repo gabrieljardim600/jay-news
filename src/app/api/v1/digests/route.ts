@@ -1,4 +1,4 @@
-import { accountClient, byAccount, withService } from "@/lib/api/service-auth";
+import { accountClient, byAccount, byProfile, withService } from "@/lib/api/service-auth";
 import { NextResponse } from "next/server";
 
 type Cursor = { generated_at: string; id: string };
@@ -37,7 +37,7 @@ export const GET = withService(async (req, ctx) => {
     .order("id", { ascending: false })
     .limit(limit);
 
-  query = byAccount(query, ctx);
+  query = byProfile(byAccount(query, ctx), req);
 
   if (digestConfigId) query = query.eq("digest_config_id", digestConfigId);
   if (from) query = query.gte("generated_at", from);

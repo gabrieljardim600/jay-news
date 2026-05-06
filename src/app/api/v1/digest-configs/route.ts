@@ -2,6 +2,8 @@ import {
   ServiceAuthError,
   accountClient,
   byAccount,
+  byProfile,
+  readProfileId,
   requireRole,
   withService,
 } from "@/lib/api/service-auth";
@@ -16,7 +18,7 @@ export const GET = withService(async (req, ctx) => {
   const includeInactive = url.searchParams.get("include_inactive") === "1";
 
   let q = supabase.from("digest_configs").select(SELECT_COLS).order("created_at", { ascending: false });
-  q = byAccount(q, ctx);
+  q = byProfile(byAccount(q, ctx), req);
   if (!includeInactive) q = q.eq("is_active", true);
 
   const { data, error } = await q;
@@ -37,9 +39,11 @@ export const POST = withService(async (req, ctx) => {
   }
 
   const supabase = accountClient(ctx);
+  const profileId = readProfileId(req);
   const insert = {
     user_id: ctx.user_id,
     account_id: ctx.account_id,
+    profile_id: profileId,
     name,
     icon: body.icon ?? undefined,
     color: body.color ?? undefined,

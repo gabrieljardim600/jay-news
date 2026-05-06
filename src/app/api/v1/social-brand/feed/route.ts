@@ -1,4 +1,4 @@
-import { accountClient, byAccount, withService } from "@/lib/api/service-auth";
+import { accountClient, byAccount, byProfile, withService } from "@/lib/api/service-auth";
 import { NextResponse } from "next/server";
 
 export const GET = withService(async (req, ctx) => {
@@ -15,7 +15,7 @@ export const GET = withService(async (req, ctx) => {
     )
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(limit);
-  q = byAccount(q, ctx);
+  q = byProfile(byAccount(q, ctx), req);
   if (targetId) q = q.eq("target_id", targetId);
   if (platform) q = q.eq("platform", platform);
 

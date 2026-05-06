@@ -131,6 +131,41 @@ export function byAccount<Q extends { eq: (col: string, val: string) => Q }>(
   return query.eq("account_id", ctx.account_id);
 }
 
+/**
+ * Optional profile filter (Radar / Phase 12). Reads `profile_id` from the
+ * request URL; if absent, returns the query unchanged (account-wide).
+ *
+ * Usage:
+ *   const supabase = accountClient(ctx);
+ *   const q = supabase.from('digests').select('*');
+ *   const filtered = byProfile(byAccount(q, ctx), req);
+ */
+export function byProfile<Q extends { eq: (col: string, val: string) => Q }>(
+  query: Q,
+  req: Request
+): Q {
+  const url = new URL(req.url);
+  const profileId = url.searchParams.get("profile_id");
+  if (profileId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profileId)) {
+    return query.eq("profile_id", profileId);
+  }
+  return query;
+}
+
+/**
+ * Read `profile_id` from URL search params, validate as UUID. Returns null
+ * if absent or invalid. Use for INSERTs that should associate a row with
+ * the calling profile.
+ */
+export function readProfileId(req: Request): string | null {
+  const url = new URL(req.url);
+  const profileId = url.searchParams.get("profile_id");
+  if (profileId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(profileId)) {
+    return profileId;
+  }
+  return null;
+}
+
 /** Wrap a route handler with service auth + uniform error mapping. Supports
  *  Next.js App Router second-arg `{ params }` for dynamic routes. */
 export function withService<T, P = Record<string, never>>(

@@ -2,6 +2,8 @@ import {
   ServiceAuthError,
   accountClient,
   byAccount,
+  byProfile,
+  readProfileId,
   requireRole,
   withService,
 } from "@/lib/api/service-auth";
@@ -12,14 +14,14 @@ const SELECT_COLS = `id, platform, identifier, label, brand_key, niche, mode, is
 
 const VALID_PLATFORMS = ["instagram", "facebook_page", "meta_ads", "tiktok"];
 
-export const GET = withService(async (_req, ctx) => {
+export const GET = withService(async (req, ctx) => {
   const supabase = accountClient(ctx);
   let q = supabase
     .from("social_brand_targets")
     .select(SELECT_COLS)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
-  q = byAccount(q, ctx);
+  q = byProfile(byAccount(q, ctx), req);
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: { message: error.message } }, { status: 500 });
   return NextResponse.json({ data: data || [] });
@@ -47,11 +49,13 @@ export const POST = withService(async (req, ctx) => {
   }
 
   const supabase = accountClient(ctx);
+  const profileId = readProfileId(req);
   const { data, error } = await supabase
     .from("social_brand_targets")
     .upsert(
       {
         account_id: ctx.account_id,
+        profile_id: profileId,
         user_id: ctx.user_id,
         platform,
         identifier,
