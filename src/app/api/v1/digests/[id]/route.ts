@@ -30,12 +30,13 @@ export const GET = withService<unknown, Params>(async (_req, ctx, { params }) =>
     is_highlight: boolean | null;
     image_url: string | null;
     published_at: string | null;
+    full_content: string | null;
   };
 
   const { data: articles, error: aErr } = await supabase
     .from("articles")
     .select(
-      "id, topic_id, alert_id, title, source_name, source_url, summary, key_quote, relevance_score, is_highlight, image_url, published_at"
+      "id, topic_id, alert_id, title, source_name, source_url, summary, key_quote, relevance_score, is_highlight, image_url, published_at, full_content"
     )
     .eq("digest_id", id)
     .order("relevance_score", { ascending: false, nullsFirst: false });
