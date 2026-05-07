@@ -30,6 +30,7 @@ async function runFetcher(
 
 export interface AccountTarget extends SocialBrandTarget {
   account_id: string | null;
+  profile_id?: string | null;
 }
 
 export async function syncTargetForAccount(
@@ -101,6 +102,7 @@ export async function syncTargetForAccount(
           target_id: target.id,
           user_id: target.user_id, // mantém pra compat com tabela legada
           account_id: accountId,
+          profile_id: target.profile_id ?? null,
           external_id: p.external_id,
           kind: p.kind,
           platform: target.platform,
