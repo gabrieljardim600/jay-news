@@ -37,14 +37,16 @@ export async function initializeDigest(
 
   let settings: Settings;
 
+  let profileId: string | null = null;
   if (digestConfigId) {
     const { data: config } = await supabase
       .from("digest_configs")
-      .select("language, summary_style, max_articles, digest_type, trend_topic, trend_keywords")
+      .select("language, summary_style, max_articles, digest_type, trend_topic, trend_keywords, profile_id")
       .eq("id", digestConfigId)
       .single();
     if (!config) throw new Error(`Digest config not found: ${digestConfigId}`);
-    settings = config;
+    settings = config as Settings;
+    profileId = (config as { profile_id?: string | null }).profile_id ?? null;
   } else {
     const { data: settingsData } = await supabase
       .from("user_settings")
@@ -75,6 +77,7 @@ export async function initializeDigest(
     .insert({
       user_id: userId,
       account_id: accountId ?? null,
+      profile_id: profileId,
       type,
       status: "processing",
       digest_config_id: digestConfigId || null,
